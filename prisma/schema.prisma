@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Trainee {
+  id               String   @id @default(cuid())
+  name             String
+  phone            String   @default("")
+  weight           Float
+  height           Float
+  age              Int
+  subscriptionDate DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  courses          Course[]
+}
+
+model ExerciseGroup {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  exercises   Exercise[]
+}
+
+model Exercise {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  sets        Int           @default(3)
+  reps        Int           @default(10)
+  groupId     String
+  group       ExerciseGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  courseDayExercises CourseDayExercise[]
+}
+
+model Course {
+  id           String       @id @default(cuid())
+  traineeId    String
+  trainee      Trainee      @relation(fields: [traineeId], references: [id], onDelete: Cascade)
+  numberOfDays Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  days         CourseDay[]
+}
+
+model CourseDay {
+  id         String              @id @default(cuid())
+  courseId   String
+  course     Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  dayNumber  Int
+  exercises  CourseDayExercise[]
+
+  @@unique([courseId, dayNumber])
+}
+
+model CourseDayExercise {
+  id           String     @id @default(cuid())
+  courseDayId  String
+  courseDay    CourseDay  @relation(fields: [courseDayId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise   @relation(fields: [exerciseId], references: [id])
+  customSets   Int?
+  customReps   Int?
+  order        Int        @default(0)
+}
