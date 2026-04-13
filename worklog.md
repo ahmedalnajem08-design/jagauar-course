@@ -1,26 +1,35 @@
-# Worklog
-
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Build Fitness Course Management System
+Agent: Main
+Task: Add login system, trainer model, gender field, admin account, trainer management in settings, and trainer info in print
 
 Work Log:
-- Initialized Next.js 16 fullstack project
-- Created Prisma schema with Trainee, ExerciseGroup, Exercise, Course, CourseDay, CourseDayExercise models
-- Pushed schema to SQLite database
-- Created API routes: /api/trainees, /api/exercise-groups, /api/exercises, /api/courses
-- Built TraineesManager component (CRUD with cards, dialogs, delete confirmation)
-- Built ExerciseGroupsManager component (groups with expandable exercises, full CRUD)
-- Built CourseBuilder component (4-step wizard: select trainee, set days, add exercises, review)
-- Built CoursesList component (list view, detail view with day tabs, print/share features)
-- Built main page.tsx with RTL sidebar navigation
-- Updated layout.tsx with Arabic language support
-- Installed html2canvas for image export
-- All API routes verified working via dev server logs
-- Lint passes with no errors
+- Updated Prisma schema to add Trainer model with name, phone, password, role fields
+- Added gender field to Trainee model (male/female)
+- Added trainerId foreign key to Trainee, ExerciseGroup, and Course models
+- Created migration and applied it
+- Seeded default admin account (المدير / admin123)
+- Created /api/auth route for login
+- Created /api/trainers route for trainer CRUD
+- Updated /api/trainees to filter by trainerId and support gender
+- Updated /api/exercise-groups to filter by trainerId
+- Updated /api/courses to filter by trainerId and include trainer relation
+- Created useAuth hook with AuthProvider context
+- Created LoginPage component with phone/password form
+- Updated page.tsx with AuthProvider wrapper and login gate
+- Updated TraineesManager with gender field (male/female toggle)
+- Updated ExerciseGroupsManager to filter by trainerId
+- Updated CourseBuilder to use trainerId
+- Updated CoursesList to filter by trainerId, show trainer info, and display gender
+- Updated SettingsManager with trainer management tab (admin only)
+- Updated print template to show trainer name and phone
+- Added user info and logout button to sidebar
+- Fixed lint errors
 
 Stage Summary:
-- Complete fitness course management system built
-- Features: trainee management, exercise groups, course builder, course viewing, printing, WhatsApp sharing
-- All API endpoints functional and tested
+- Full authentication system with login gate
+- Each trainer sees only their own data (trainees, groups, courses)
+- Admin account can manage trainers from Settings
+- Gender field (male/female) added to trainee form
+- Print template shows trainer name and phone
+- Default admin credentials: المدير / admin123

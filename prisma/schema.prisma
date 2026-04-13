@@ -7,14 +7,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Trainer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @default("")
+  password  String
+  role      String   @default("trainer") // "admin" or "trainer"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainees       Trainee[]
+  exerciseGroups ExerciseGroup[]
+  courses        Course[]
+}
+
 model Trainee {
   id               String   @id @default(cuid())
   name             String
   phone            String   @default("")
+  gender           String   @default("male") // "male" or "female"
   weight           Float
   height           Float
   age              Int
   subscriptionDate DateTime @default(now())
+  trainerId        String
+  trainer          Trainer  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   courses          Course[]
@@ -24,6 +41,8 @@ model ExerciseGroup {
   id          String     @id @default(cuid())
   name        String
   description String?
+  trainerId   String
+  trainer     Trainer    @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   exercises   Exercise[]
@@ -46,6 +65,8 @@ model Course {
   id           String       @id @default(cuid())
   traineeId    String
   trainee      Trainee      @relation(fields: [traineeId], references: [id], onDelete: Cascade)
+  trainerId    String
+  trainer      Trainer      @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   numberOfDays Int
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

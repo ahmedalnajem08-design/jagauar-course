@@ -8,12 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Pencil, Trash2, Users, Weight, Ruler, Calendar, User, Phone } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
+import { Plus, Pencil, Trash2, Users, Weight, Ruler, Calendar, User, Phone, VenusAndMars } from 'lucide-react'
 
 interface Trainee {
   id: string
   name: string
   phone: string
+  gender: string
   weight: number
   height: number
   age: number
@@ -22,9 +24,10 @@ interface Trainee {
   courses: { id: string }[]
 }
 
-const emptyForm = { name: '', phone: '', weight: '', height: '', age: '', subscriptionDate: new Date().toISOString().split('T')[0] }
+const emptyForm = { name: '', phone: '', gender: 'male', weight: '', height: '', age: '', subscriptionDate: new Date().toISOString().split('T')[0] }
 
 export default function TraineesManager() {
+  const { user } = useAuth()
   const [trainees, setTrainees] = useState<Trainee[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -35,8 +38,9 @@ export default function TraineesManager() {
   const { toast } = useToast()
 
   const fetchTrainees = useCallback(async () => {
+    if (!user) return
     try {
-      const res = await fetch('/api/trainees')
+      const res = await fetch(`/api/trainees?trainerId=${user.id}`)
       const data = await res.json()
       setTrainees(data)
     } catch {
@@ -44,7 +48,7 @@ export default function TraineesManager() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, user])
 
   useEffect(() => { fetchTrainees() }, [fetchTrainees])
 
@@ -58,7 +62,7 @@ export default function TraineesManager() {
         await fetch('/api/trainees', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, ...form }) })
         toast({ title: 'تم التحديث', description: 'تم تحديث بيانات المتدرب بنجاح' })
       } else {
-        await fetch('/api/trainees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+        await fetch('/api/trainees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, trainerId: user!.id }) })
         toast({ title: 'تمت الإضافة', description: 'تم إضافة المتدرب بنجاح' })
       }
       setDialogOpen(false)
@@ -88,6 +92,7 @@ export default function TraineesManager() {
     setForm({
       name: t.name,
       phone: t.phone || '',
+      gender: t.gender || 'male',
       weight: t.weight.toString(),
       height: t.height.toString(),
       age: t.age.toString(),
@@ -114,7 +119,7 @@ export default function TraineesManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 rounded-lg">
+          <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
             <Users className="h-6 w-6 text-emerald-600" />
           </div>
           <div>
@@ -147,8 +152,8 @@ export default function TraineesManager() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-emerald-600" />
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${t.gender === 'female' ? 'bg-pink-100 dark:bg-pink-900' : 'bg-emerald-100 dark:bg-emerald-900'}`}>
+                      <User className={`h-5 w-5 ${t.gender === 'female' ? 'text-pink-600' : 'text-emerald-600'}`} />
                     </div>
                     <CardTitle className="text-lg">{t.name}</CardTitle>
                   </div>
@@ -165,6 +170,10 @@ export default function TraineesManager() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
+                    <VenusAndMars className="h-4 w-4 text-emerald-500" />
+                    <span>الجنس: <span className="text-foreground font-medium">{t.gender === 'female' ? 'أنثى' : 'ذكر'}</span></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Weight className="h-4 w-4 text-emerald-500" />
                     <span>الوزن: <span className="text-foreground font-medium">{t.weight} كغ</span></span>
                   </div>
@@ -176,7 +185,7 @@ export default function TraineesManager() {
                     <User className="h-4 w-4 text-emerald-500" />
                     <span>العمر: <span className="text-foreground font-medium">{t.age} سنة</span></span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 text-muted-foreground col-span-2">
                     <Calendar className="h-4 w-4 text-emerald-500" />
                     <span className="text-foreground font-medium">{new Date(t.subscriptionDate).toLocaleDateString('ar-IQ')}</span>
                   </div>
@@ -208,6 +217,27 @@ export default function TraineesManager() {
             <div className="space-y-2">
               <Label htmlFor="name">الاسم *</Label>
               <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم المتدرب" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gender">الجنس *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, gender: 'male' })}
+                  className={`p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 text-sm font-medium ${form.gender === 'male' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700' : 'border-border hover:border-emerald-300'}`}
+                >
+                  <User className="h-4 w-4" />
+                  ذكر
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, gender: 'female' })}
+                  className={`p-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 text-sm font-medium ${form.gender === 'female' ? 'border-pink-500 bg-pink-50 dark:bg-pink-950 text-pink-700' : 'border-border hover:border-pink-300'}`}
+                >
+                  <User className="h-4 w-4" />
+                  أنثى
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">رقم الهاتف</Label>

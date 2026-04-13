@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X } from 'lucide-react'
 
 interface Trainee {
@@ -16,6 +17,7 @@ interface Trainee {
   weight: number
   height: number
   age: number
+  gender: string
 }
 
 interface Exercise {
@@ -47,6 +49,7 @@ interface DayData {
 }
 
 export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
+  const { user } = useAuth()
   const [trainees, setTrainees] = useState<Trainee[]>([])
   const [groups, setGroups] = useState<ExerciseGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,10 +63,11 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
+    if (!user) return
     try {
       const [tRes, gRes] = await Promise.all([
-        fetch('/api/trainees'),
-        fetch('/api/exercise-groups'),
+        fetch(`/api/trainees?trainerId=${user.id}`),
+        fetch(`/api/exercise-groups?trainerId=${user.id}`),
       ])
       const tData = await tRes.json()
       const gData = await gRes.json()
@@ -74,7 +78,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, user])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -155,6 +159,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           traineeId: selectedTrainee,
+          trainerId: user!.id,
           numberOfDays,
           days: daysWithExercises.map((d) => ({
             dayNumber: d.dayNumber,
@@ -195,7 +200,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-emerald-100 rounded-lg">
+        <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
           <Save className="h-6 w-6 text-emerald-600" />
         </div>
         <div>
@@ -236,15 +241,15 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                   <div
                     key={t.id}
                     onClick={() => setSelectedTrainee(t.id)}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${selectedTrainee === t.id ? 'border-emerald-500 bg-emerald-50' : 'border-border hover:border-emerald-300'}`}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${selectedTrainee === t.id ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950' : 'border-border hover:border-emerald-300'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedTrainee === t.id ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-600'}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${selectedTrainee === t.id ? 'bg-emerald-500 text-white' : t.gender === 'female' ? 'bg-pink-100 dark:bg-pink-900 text-pink-600' : 'bg-emerald-100 dark:bg-emerald-900 text-emerald-600'}`}>
                         <User className="h-5 w-5" />
                       </div>
                       <div>
                         <h4 className="font-semibold">{t.name}</h4>
-                        <p className="text-xs text-muted-foreground">{t.age} سنة | {t.weight} كغ | {t.height} سم</p>
+                        <p className="text-xs text-muted-foreground">{t.age} سنة | {t.weight} كغ | {t.height} سم | {t.gender === 'female' ? 'أنثى' : 'ذكر'}</p>
                       </div>
                     </div>
                   </div>
@@ -478,6 +483,10 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
               <div>
                 <span className="text-sm text-muted-foreground">عدد الأيام</span>
                 <p className="font-semibold">{numberOfDays} يوم</p>
+              </div>
+              <div>
+                <span className="text-sm text-muted-foreground">المدرب</span>
+                <p className="font-semibold">{user?.name}</p>
               </div>
             </div>
 

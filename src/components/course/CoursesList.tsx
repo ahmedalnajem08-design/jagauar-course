@@ -8,8 +8,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { defaultPrintSettings, type PrintSettings } from '@/hooks/use-settings'
-import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings } from 'lucide-react'
+import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings, VenusAndMars } from 'lucide-react'
 import html2canvas from 'html2canvas'
 
 interface CourseDayExercise {
@@ -34,14 +35,24 @@ interface CourseDay {
   exercises: CourseDayExercise[]
 }
 
+interface TrainerInfo {
+  id: string
+  name: string
+  phone: string
+  role: string
+}
+
 interface Course {
   id: string
   numberOfDays: number
   createdAt: string
+  trainerId: string
+  trainer: TrainerInfo
   trainee: {
     id: string
     name: string
     phone: string
+    gender: string
     weight: number
     height: number
     age: number
@@ -51,6 +62,7 @@ interface Course {
 }
 
 export default function CoursesList({ refreshTrigger }: { refreshTrigger?: number }) {
+  const { user } = useAuth()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
@@ -88,8 +100,9 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   }, [])
 
   const fetchCourses = useCallback(async () => {
+    if (!user) return
     try {
-      const res = await fetch('/api/courses')
+      const res = await fetch(`/api/courses?trainerId=${user.id}`)
       const data = await res.json()
       setCourses(data)
     } catch {
@@ -97,7 +110,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, user])
 
   useEffect(() => { fetchCourses(); reloadSettings() }, [fetchCourses, refreshTrigger, reloadSettings])
 
@@ -160,7 +173,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         link.click()
         URL.revokeObjectURL(url)
 
-        const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\n\n` +
+        const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
           (selectedCourse?.days.map((day) =>
             `اليوم ${day.dayNumber}:\n` +
             day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`).join('\n')
@@ -215,7 +228,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             </Button>
             <div>
               <h2 className="text-2xl font-bold">كورس {selectedCourse.trainee.name}</h2>
-              <p className="text-muted-foreground">{selectedCourse.numberOfDays} أيام</p>
+              <p className="text-muted-foreground">{selectedCourse.numberOfDays} أيام | المدرب: {selectedCourse.trainer.name}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -234,12 +247,19 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         {printSettings.showTraineeInfo && (
           <Card>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-emerald-500" />
                   <div>
                     <p className="text-xs text-muted-foreground">الاسم</p>
                     <p className="font-medium">{selectedCourse.trainee.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <VenusAndMars className="h-4 w-4 text-emerald-500" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">الجنس</p>
+                    <p className="font-medium">{selectedCourse.trainee.gender === 'female' ? 'أنثى' : 'ذكر'}</p>
                   </div>
                 </div>
                 {printSettings.showPhone && (
@@ -388,7 +408,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-emerald-100 rounded-lg">
+        <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
           <ClipboardList className="h-6 w-6 text-emerald-600" />
         </div>
         <div>
@@ -412,8 +432,8 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-emerald-600" />
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${course.trainee.gender === 'female' ? 'bg-pink-100 dark:bg-pink-900' : 'bg-emerald-100 dark:bg-emerald-900'}`}>
+                      <User className={`h-5 w-5 ${course.trainee.gender === 'female' ? 'text-pink-600' : 'text-emerald-600'}`} />
                     </div>
                     <div>
                       <CardTitle className="text-lg">{course.trainee.name}</CardTitle>
@@ -436,6 +456,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                   <span className="text-muted-foreground">
                     {course.days.reduce((sum, d) => sum + d.exercises.length, 0)} تمرين
                   </span>
+                  <span className="text-xs text-muted-foreground">المدرب: {course.trainer.name}</span>
                 </div>
                 {course.days.length > 0 && (
                   <div className="mt-3 flex gap-1 flex-wrap">
@@ -538,6 +559,34 @@ function CoursePrintContent({ course, settings }: {
         </div>
       </div>
 
+      {/* Trainer Info */}
+      <div style={{
+        background: '#f8fafc',
+        borderRadius: '10px',
+        padding: '14px 18px',
+        marginBottom: '20px',
+        border: `1px solid #e2e8f0`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>
+            م
+          </div>
+          <div>
+            <span style={{ fontSize: '11px', color: '#999', display: 'block' }}>المدرب المسؤول</span>
+            <p style={{ fontWeight: 'bold', margin: '2px 0 0 0', fontSize: '14px', color: '#1a1a1a' }}>{course.trainer.name}</p>
+          </div>
+        </div>
+        {course.trainer.phone && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#555' }}>
+            <span>هاتف المدرب:</span>
+            <span style={{ fontWeight: '600', direction: 'ltr' }}>{course.trainer.phone}</span>
+          </div>
+        )}
+      </div>
+
       {/* Trainee Info */}
       {settings.showTraineeInfo && (
         <div style={{
@@ -552,12 +601,16 @@ function CoursePrintContent({ course, settings }: {
           </h3>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${[true, settings.showPhone, settings.showWeight, settings.showHeight, settings.showAge, settings.showSubscriptionDate].filter(Boolean).length}, 1fr)`,
+            gridTemplateColumns: `repeat(${[true, true, settings.showPhone, settings.showWeight, settings.showHeight, settings.showAge, settings.showSubscriptionDate].filter(Boolean).length}, 1fr)`,
             gap: '12px',
           }}>
             <div>
               <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الاسم</span>
               <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.name}</p>
+            </div>
+            <div>
+              <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الجنس</span>
+              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.gender === 'female' ? 'أنثى' : 'ذكر'}</p>
             </div>
             {settings.showPhone && (
               <div>
@@ -641,7 +694,7 @@ function CoursePrintContent({ course, settings }: {
         color: '#999',
       }}>
         <p style={{ margin: 0 }}>
-          {settings.footerText || `${settings.gymName} ${settings.gymPhone ? `| هاتف: ${settings.gymPhone}` : ''}`}
+          {settings.footerText || `${settings.gymName} ${settings.gymPhone ? `| هاتف: ${settings.gymPhone}` : ''} ${course.trainer.phone ? `| المدرب: ${course.trainer.name} - ${course.trainer.phone}` : ''}`}
         </p>
       </div>
     </div>

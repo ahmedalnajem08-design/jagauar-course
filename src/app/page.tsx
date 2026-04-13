@@ -3,24 +3,27 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { AuthProvider, useAuth } from '@/hooks/use-auth'
+import LoginPage from '@/components/course/LoginPage'
 import TraineesManager from '@/components/course/TraineesManager'
 import ExerciseGroupsManager from '@/components/course/ExerciseGroupsManager'
 import CourseBuilder from '@/components/course/CourseBuilder'
 import CoursesList from '@/components/course/CoursesList'
 import SettingsManager from '@/components/course/SettingsManager'
-import { Users, Dumbbell, PlusCircle, ClipboardList, Settings, Menu, X } from 'lucide-react'
+import { Users, Dumbbell, PlusCircle, ClipboardList, Settings, Menu, X, LogOut, UserCircle } from 'lucide-react'
 
 const navItems = [
-  { id: 'trainees', label: 'المتدربين', icon: Users },
-  { id: 'exercises', label: 'مجموعات التمارين', icon: Dumbbell },
-  { id: 'create', label: 'إنشاء كورس', icon: PlusCircle },
-  { id: 'courses', label: 'الكورسات', icon: ClipboardList },
-  { id: 'settings', label: 'الإعدادات', icon: Settings },
+  { id: 'trainees', label: 'المتدربين', icon: Users, roles: ['admin', 'trainer'] },
+  { id: 'exercises', label: 'مجموعات التمارين', icon: Dumbbell, roles: ['admin', 'trainer'] },
+  { id: 'create', label: 'إنشاء كورس', icon: PlusCircle, roles: ['admin', 'trainer'] },
+  { id: 'courses', label: 'الكورسات', icon: ClipboardList, roles: ['admin', 'trainer'] },
+  { id: 'settings', label: 'الإعدادات', icon: Settings, roles: ['admin', 'trainer'] },
 ] as const
 
 type NavId = typeof navItems[number]['id']
 
-export default function Home() {
+function AppContent() {
+  const { user, logout, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState<NavId>('trainees')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [courseRefresh, setCourseRefresh] = useState(0)
@@ -29,6 +32,20 @@ export default function Home() {
     setCourseRefresh((prev) => prev + 1)
     setActiveTab('courses')
   }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginPage />
+  }
+
+  const filteredNavItems = navItems.filter((item) => item.roles.includes(user.role))
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -68,7 +85,7 @@ export default function Home() {
 
             {/* Navigation */}
             <nav className="flex-1 p-4 space-y-1">
-              {navItems.map((item) => {
+              {filteredNavItems.map((item) => {
                 const Icon = item.icon
                 return (
                   <button
@@ -88,11 +105,28 @@ export default function Home() {
               })}
             </nav>
 
-            {/* Footer */}
+            {/* User Info & Logout */}
             <div className="p-4 border-t">
-              <div className="text-xs text-muted-foreground text-center">
-                نظام كتابة الكورسات التدريبية
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-9 w-9 bg-emerald-100 dark:bg-emerald-900 rounded-full flex items-center justify-center">
+                  <UserCircle className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user.role === 'admin' ? 'مدير النظام' : 'مدرب'}
+                  </p>
+                </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={logout}
+                className="w-full gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+              >
+                <LogOut className="h-4 w-4" />
+                تسجيل الخروج
+              </Button>
             </div>
           </div>
         </aside>
@@ -117,5 +151,13 @@ export default function Home() {
         </main>
       </div>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }

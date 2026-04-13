@@ -1,9 +1,12 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const trainerId = request.nextUrl.searchParams.get('trainerId')
+
     const trainees = await db.trainee.findMany({
+      where: trainerId ? { trainerId } : undefined,
       orderBy: { createdAt: 'desc' },
       include: { courses: true },
     })
@@ -21,10 +24,12 @@ export async function POST(request: NextRequest) {
       data: {
         name: body.name,
         phone: body.phone || '',
+        gender: body.gender || 'male',
         weight: parseFloat(body.weight),
         height: parseFloat(body.height),
         age: parseInt(body.age),
         subscriptionDate: new Date(body.subscriptionDate),
+        trainerId: body.trainerId,
       },
     })
     return NextResponse.json(trainee, { status: 201 })
@@ -42,6 +47,7 @@ export async function PUT(request: NextRequest) {
       data: {
         name: body.name,
         phone: body.phone || '',
+        gender: body.gender || 'male',
         weight: parseFloat(body.weight),
         height: parseFloat(body.height),
         age: parseInt(body.age),

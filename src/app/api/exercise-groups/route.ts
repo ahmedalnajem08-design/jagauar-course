@@ -1,9 +1,12 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const trainerId = request.nextUrl.searchParams.get('trainerId')
+
     const groups = await db.exerciseGroup.findMany({
+      where: trainerId ? { trainerId } : undefined,
       orderBy: { createdAt: 'desc' },
       include: { exercises: { orderBy: { createdAt: 'asc' } } },
     })
@@ -21,6 +24,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: body.name,
         description: body.description || null,
+        trainerId: body.trainerId,
       },
     })
     return NextResponse.json(group, { status: 201 })

@@ -1,17 +1,35 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { usePrintSettings, useTheme, defaultPrintSettings, type PrintSettings } from '@/hooks/use-settings'
-import { Settings, Sun, Moon, Printer, Image, Type, Layout, Palette, RotateCcw, Eye, Upload } from 'lucide-react'
+import { Settings, Sun, Moon, Printer, Image, Type, Layout, Palette, RotateCcw, Eye, Upload, UserPlus, Pencil, Trash2, User, Phone, Shield, Users } from 'lucide-react'
+
+interface TrainerItem {
+  id: string
+  name: string
+  phone: string
+  role: string
+  createdAt: string
+  _count: {
+    trainees: number
+    exerciseGroups: number
+    courses: number
+  }
+}
 
 export default function SettingsManager() {
+  const { user } = useAuth()
   const { settings, saveSettings } = usePrintSettings()
   const { theme, setTheme } = useTheme()
   const [localSettings, setLocalSettings] = useState<PrintSettings>(() => settings)
@@ -19,6 +37,36 @@ export default function SettingsManager() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bannerInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+
+  // Trainer management state
+  const [trainers, setTrainers] = useState<TrainerItem[]>([])
+  const [trainerDialogOpen, setTrainerDialogOpen] = useState(false)
+  const [deleteTrainerDialogOpen, setDeleteTrainerDialogOpen] = useState(false)
+  const [editingTrainerId, setEditingTrainerId] = useState<string | null>(null)
+  const [deletingTrainerId, setDeletingTrainerId] = useState<string | null>(null)
+  const [trainerForm, setTrainerForm] = useState({ name: '', phone: '', password: '1234', role: 'trainer' })
+
+  const isAdmin = user?.role === 'admin'
+
+  const fetchTrainers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/trainers')
+      const data = await res.json()
+      return data as TrainerItem[]
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في تحميل المدربين', variant: 'destructive' })
+      return []
+    }
+  }, [toast])
+
+  // Load trainers on mount
+  const [trainersLoaded, setTrainersLoaded] = useState(false)
+  if (isAdmin && !trainersLoaded) {
+    setTrainersLoaded(true)
+    fetchTrainers().then((data) => {
+      if (data.length > 0) setTrainers(data)
+    })
+  }
 
   const handleSave = () => {
     saveSettings(localSettings)
@@ -57,6 +105,67 @@ export default function SettingsManager() {
     setLocalSettings((prev) => ({ ...prev, [key]: value }))
   }
 
+  // Trainer CRUD
+  const handleSaveTrainer = async () => {
+    if (!trainerForm.name) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال اسم المدرب', variant: 'destructive' })
+      return
+    }
+    try {
+      if (editingTrainerId) {
+        await fetch('/api/trainers', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingTrainerId, ...trainerForm }),
+        })
+        toast({ title: 'تم التحديث', description: 'تم تحديث بيانات المدرب بنجاح' })
+      } else {
+        await fetch('/api/trainers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(trainerForm),
+        })
+        toast({ title: 'تمت الإضافة', description: 'تم إضافة المدرب بنجاح' })
+      }
+      setTrainerDialogOpen(false)
+      setTrainerForm({ name: '', phone: '', password: '1234', role: 'trainer' })
+      setEditingTrainerId(null)
+      fetchTrainers().then((data) => setTrainers(data))
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في حفظ المدرب', variant: 'destructive' })
+    }
+  }
+
+  const handleDeleteTrainer = async () => {
+    if (!deletingTrainerId) return
+    try {
+      const res = await fetch(`/api/trainers?id=${deletingTrainerId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.error) {
+        toast({ title: 'خطأ', description: data.error, variant: 'destructive' })
+        return
+      }
+      toast({ title: 'تم الحذف', description: 'تم حذف المدرب بنجاح' })
+      setDeleteTrainerDialogOpen(false)
+      setDeletingTrainerId(null)
+      fetchTrainers().then((data) => setTrainers(data))
+    } catch {
+      toast({ title: 'خطأ', description: 'فشل في حذف المدرب', variant: 'destructive' })
+    }
+  }
+
+  const openEditTrainer = (t: TrainerItem) => {
+    setEditingTrainerId(t.id)
+    setTrainerForm({ name: t.name, phone: t.phone, password: '', role: t.role })
+    setTrainerDialogOpen(true)
+  }
+
+  const openAddTrainer = () => {
+    setEditingTrainerId(null)
+    setTrainerForm({ name: '', phone: '', password: '1234', role: 'trainer' })
+    setTrainerDialogOpen(true)
+  }
+
   // Preview mode
   if (previewMode) {
     return (
@@ -75,7 +184,7 @@ export default function SettingsManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 rounded-lg">
+          <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
             <Settings className="h-6 w-6 text-emerald-600" />
           </div>
           <div>
@@ -86,7 +195,7 @@ export default function SettingsManager() {
       </div>
 
       <Tabs defaultValue="theme" className="space-y-4">
-        <TabsList className="flex gap-1 h-auto bg-muted p-1">
+        <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
           <TabsTrigger value="theme" className="gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
             <Palette className="h-4 w-4" />
             المظهر
@@ -107,6 +216,12 @@ export default function SettingsManager() {
             <Image className="h-4 w-4" />
             البنر
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="trainers" className="gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+              <Users className="h-4 w-4" />
+              المدربين
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Theme Tab */}
@@ -124,14 +239,14 @@ export default function SettingsManager() {
                 <div className="grid grid-cols-2 gap-4 max-w-md">
                   <button
                     onClick={() => setTheme('light')}
-                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'light' ? 'border-emerald-500 bg-emerald-50 shadow-md' : 'border-border hover:border-emerald-300'}`}
+                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'light' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950 shadow-md' : 'border-border hover:border-emerald-300'}`}
                   >
                     <Sun className="h-8 w-8 text-amber-500" />
                     <span className="font-medium">فاتح</span>
                   </button>
                   <button
                     onClick={() => setTheme('dark')}
-                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'dark' ? 'border-emerald-500 bg-emerald-50 shadow-md' : 'border-border hover:border-emerald-300'}`}
+                    className={`p-6 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${theme === 'dark' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950 shadow-md' : 'border-border hover:border-emerald-300'}`}
                   >
                     <Moon className="h-8 w-8 text-indigo-500" />
                     <span className="font-medium">داكن</span>
@@ -505,6 +620,75 @@ export default function SettingsManager() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Trainers Tab (Admin Only) */}
+        {isAdmin && (
+          <TabsContent value="trainers">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-emerald-600" />
+                    إدارة المدربين
+                  </CardTitle>
+                  <Button onClick={openAddTrainer} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    <UserPlus className="h-4 w-4" />
+                    إضافة مدرب
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  إدارة حسابات المدربين. كل مدرب يرى بياناته الخاصة فقط (المتدربين، المجموعات، الكورسات).
+                </p>
+                <div className="space-y-3">
+                  {trainers.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`h-12 w-12 rounded-full flex items-center justify-center ${t.role === 'admin' ? 'bg-amber-100 dark:bg-amber-900' : 'bg-emerald-100 dark:bg-emerald-900'}`}>
+                          {t.role === 'admin' ? (
+                            <Shield className="h-6 w-6 text-amber-600" />
+                          ) : (
+                            <User className="h-6 w-6 text-emerald-600" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-lg">{t.name}</span>
+                            <Badge variant={t.role === 'admin' ? 'default' : 'secondary'} className={t.role === 'admin' ? 'bg-amber-500' : 'bg-emerald-100 text-emerald-700'}>
+                              {t.role === 'admin' ? 'مدير' : 'مدرب'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                            {t.phone && (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {t.phone}
+                              </span>
+                            )}
+                            <span>{t._count.trainees} متدرب</span>
+                            <span>{t._count.exerciseGroups} مجموعة</span>
+                            <span>{t._count.courses} كورس</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEditTrainer(t)} className="h-9 w-9">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {t.role !== 'admin' && (
+                          <Button variant="ghost" size="icon" onClick={() => { setDeletingTrainerId(t.id); setDeleteTrainerDialogOpen(true) }} className="h-9 w-9 text-red-500 hover:text-red-700">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Action Buttons */}
@@ -523,6 +707,74 @@ export default function SettingsManager() {
           </Button>
         </div>
       </div>
+
+      {/* Trainer Add/Edit Dialog */}
+      <Dialog open={trainerDialogOpen} onOpenChange={setTrainerDialogOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editingTrainerId ? 'تعديل بيانات المدرب' : 'إضافة مدرب جديد'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>اسم المدرب *</Label>
+              <Input
+                value={trainerForm.name}
+                onChange={(e) => setTrainerForm({ ...trainerForm, name: e.target.value })}
+                placeholder="اسم المدرب"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>رقم الهاتف</Label>
+              <Input
+                type="tel"
+                value={trainerForm.phone}
+                onChange={(e) => setTrainerForm({ ...trainerForm, phone: e.target.value })}
+                placeholder="07XXXXXXXX"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>كلمة المرور {editingTrainerId ? '(اتركها فارغة للإبقاء على الحالية)' : '*'}</Label>
+              <Input
+                type="password"
+                value={trainerForm.password}
+                onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })}
+                placeholder={editingTrainerId ? 'كلمة المرور الجديدة' : 'كلمة المرور'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>الصلاحية</Label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={trainerForm.role}
+                onChange={(e) => setTrainerForm({ ...trainerForm, role: e.target.value })}
+              >
+                <option value="trainer">مدرب</option>
+                <option value="admin">مدير</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setTrainerDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSaveTrainer} className="bg-emerald-600 hover:bg-emerald-700">
+              {editingTrainerId ? 'تحديث' : 'إضافة'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Trainer Confirmation */}
+      <AlertDialog open={deleteTrainerDialogOpen} onOpenChange={setDeleteTrainerDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من حذف هذا المدرب؟ سيتم حذف جميع بياناته (المتدربين، المجموعات، الكورسات).</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTrainer} className="bg-red-600 hover:bg-red-700">حذف</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -577,6 +829,27 @@ function PrintPreviewCard({ settings }: { settings: PrintSettings }) {
         </div>
       </div>
 
+      {/* Trainer Info Preview */}
+      <div style={{
+        background: '#f8fafc',
+        borderRadius: '10px',
+        padding: '14px 18px',
+        marginBottom: '20px',
+        border: '1px solid #e2e8f0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: settings.accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>م</div>
+          <div>
+            <span style={{ fontSize: '11px', color: '#999', display: 'block' }}>المدرب المسؤول</span>
+            <p style={{ fontWeight: 'bold', margin: '2px 0 0 0', fontSize: '14px', color: '#1a1a1a' }}>اسم المدرب</p>
+          </div>
+        </div>
+        <div style={{ fontSize: '13px', color: '#555' }}>هاتف المدرب: 07XXXXXXXX</div>
+      </div>
+
       {/* Trainee Info */}
       {settings.showTraineeInfo && (
         <div style={{
@@ -589,10 +862,14 @@ function PrintPreviewCard({ settings }: { settings: PrintSettings }) {
           <h3 style={{ fontSize: '17px', fontWeight: 'bold', color: settings.accentColor, marginBottom: '12px', marginTop: 0 }}>
             معلومات المتدرب
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${[settings.showPhone, settings.showWeight, settings.showHeight, settings.showAge, settings.showSubscriptionDate].filter(Boolean).length + 1}, 1fr)`, gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${[settings.showPhone, settings.showWeight, settings.showHeight, settings.showAge, settings.showSubscriptionDate].filter(Boolean).length + 2}, 1fr)`, gap: '12px' }}>
             <div>
               <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الاسم</span>
               <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>اسم المتدرب</p>
+            </div>
+            <div>
+              <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الجنس</span>
+              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>ذكر</p>
             </div>
             {settings.showPhone && (
               <div>

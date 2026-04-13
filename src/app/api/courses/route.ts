@@ -4,12 +4,14 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get('id')
+    const trainerId = request.nextUrl.searchParams.get('trainerId')
 
     if (id) {
       const course = await db.course.findUnique({
         where: { id },
         include: {
           trainee: true,
+          trainer: true,
           days: {
             orderBy: { dayNumber: 'asc' },
             include: {
@@ -26,9 +28,11 @@ export async function GET(request: NextRequest) {
     }
 
     const courses = await db.course.findMany({
+      where: trainerId ? { trainerId } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
         trainee: true,
+        trainer: true,
         days: {
           orderBy: { dayNumber: 'asc' },
           include: {
@@ -50,11 +54,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { traineeId, numberOfDays, days } = body
+    const { traineeId, trainerId, numberOfDays, days } = body
 
     const course = await db.course.create({
       data: {
         traineeId,
+        trainerId,
         numberOfDays,
         days: {
           create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number }[] }) => ({
@@ -72,6 +77,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         trainee: true,
+        trainer: true,
         days: { include: { exercises: { include: { exercise: true } } } },
       },
     })
@@ -117,6 +123,7 @@ export async function PUT(request: NextRequest) {
       },
       include: {
         trainee: true,
+        trainer: true,
         days: { include: { exercises: { include: { exercise: true } } } },
       },
     })

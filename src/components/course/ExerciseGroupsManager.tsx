@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/hooks/use-auth'
 import { Plus, Pencil, Trash2, Dumbbell, FolderOpen, ChevronDown } from 'lucide-react'
 
 interface Exercise {
@@ -33,6 +34,7 @@ const emptyGroupForm = { name: '', description: '' }
 const emptyExForm = { name: '', description: '', sets: '3', reps: '10', groupId: '' }
 
 export default function ExerciseGroupsManager() {
+  const { user } = useAuth()
   const [groups, setGroups] = useState<ExerciseGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
@@ -48,8 +50,9 @@ export default function ExerciseGroupsManager() {
   const { toast } = useToast()
 
   const fetchGroups = useCallback(async () => {
+    if (!user) return
     try {
-      const res = await fetch('/api/exercise-groups')
+      const res = await fetch(`/api/exercise-groups?trainerId=${user.id}`)
       const data = await res.json()
       setGroups(data)
     } catch {
@@ -57,7 +60,7 @@ export default function ExerciseGroupsManager() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, user])
 
   useEffect(() => { fetchGroups() }, [fetchGroups])
 
@@ -71,7 +74,7 @@ export default function ExerciseGroupsManager() {
         await fetch('/api/exercise-groups', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingGroupId, ...groupForm }) })
         toast({ title: 'تم التحديث', description: 'تم تحديث المجموعة بنجاح' })
       } else {
-        await fetch('/api/exercise-groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(groupForm) })
+        await fetch('/api/exercise-groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...groupForm, trainerId: user!.id }) })
         toast({ title: 'تمت الإضافة', description: 'تم إضافة المجموعة بنجاح' })
       }
       setGroupDialogOpen(false)
@@ -167,7 +170,7 @@ export default function ExerciseGroupsManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 rounded-lg">
+          <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
             <Dumbbell className="h-6 w-6 text-emerald-600" />
           </div>
           <div>
@@ -200,7 +203,7 @@ export default function ExerciseGroupsManager() {
               <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/50 [&>svg]:hidden">
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <div className="h-10 w-10 bg-emerald-100 dark:bg-emerald-900 rounded-lg flex items-center justify-center">
                       <Dumbbell className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div className="text-right">
