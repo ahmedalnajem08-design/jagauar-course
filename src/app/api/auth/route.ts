@@ -6,13 +6,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { phone, password } = body
 
-    // Find trainer by phone or name
+    if (!phone || !password) {
+      return NextResponse.json({ error: 'يرجى إدخال رقم الهاتف وكلمة المرور' }, { status: 400 })
+    }
+
+    // Find trainer by phone number only
     const trainer = await db.trainer.findFirst({
       where: {
-        OR: [
-          { phone: phone },
-          { name: phone },
-        ],
+        phone: phone,
         password: password,
       },
     })

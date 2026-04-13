@@ -43,15 +43,17 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-semibold">رقم الهاتف / الاسم</Label>
+              <Label htmlFor="phone" className="text-sm font-semibold">رقم الهاتف</Label>
               <div className="relative">
                 <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="phone"
+                  type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="رقم الهاتف أو اسم المستخدم"
+                  placeholder="رقم الهاتف"
                   className="pr-10 h-12"
+                  dir="ltr"
                 />
               </div>
             </div>
@@ -86,7 +88,10 @@ export default function LoginPage() {
           </form>
           <div className="mt-6 p-3 bg-muted/50 rounded-lg text-center">
             <p className="text-xs text-muted-foreground">
-              حساب المدير الافتراضي: المدير / admin123
+              تسجيل الدخول عن طريق رقم الهاتف وكلمة المرور
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              حساب المدير الافتراضي: 07700000000 / admin123
             </p>
           </div>
         </CardContent>

@@ -30,11 +30,28 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const { name, phone, password, requesterRole } = body
+
+    // Only admin can add trainers
+    if (requesterRole !== 'admin') {
+      return NextResponse.json({ error: 'ليس لديك صلاحية إضافة مدربين' }, { status: 403 })
+    }
+
+    if (!name || !phone || !password) {
+      return NextResponse.json({ error: 'يرجى ملء جميع الحقول المطلوبة (الاسم، رقم الهاتف، كلمة المرور)' }, { status: 400 })
+    }
+
+    // Check if phone number already exists
+    const existing = await db.trainer.findFirst({ where: { phone } })
+    if (existing) {
+      return NextResponse.json({ error: 'رقم الهاتف مستخدم بالفعل' }, { status: 400 })
+    }
+
     const trainer = await db.trainer.create({
       data: {
-        name: body.name,
-        phone: body.phone || '',
-        password: body.password || '1234',
+        name,
+        phone,
+        password,
         role: body.role || 'trainer',
       },
     })
@@ -56,6 +73,20 @@ export async function PUT(request: NextRequest) {
     if (body.password) {
       data.password = body.password
     }
+
+    // If phone is being changed, check for duplicates
+    if (body.phone) {
+      const existing = await db.trainer.findFirst({
+        where: {
+          phone: body.phone,
+          id: { not: body.id },
+        },
+      })
+      if (existing) {
+        return NextResponse.json({ error: 'رقم الهاتف مستخدم بالفعل' }, { status: 400 })
+      }
+    }
+
     const trainer = await db.trainer.update({
       where: { id: body.id },
       data,

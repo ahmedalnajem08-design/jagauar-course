@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { usePrintSettings, useTheme, defaultPrintSettings, type PrintSettings } from '@/hooks/use-settings'
-import { Settings, Sun, Moon, Printer, Image, Type, Layout, Palette, RotateCcw, Eye, Upload, UserPlus, Pencil, Trash2, User, Phone, Shield, Users } from 'lucide-react'
+import { Settings, Sun, Moon, Printer, Image, Type, Layout, Palette, RotateCcw, Eye, Upload, UserPlus, Pencil, Trash2, User, Phone, Shield, Users, Lock, KeyRound } from 'lucide-react'
 
 interface TrainerItem {
   id: string
@@ -45,6 +45,12 @@ export default function SettingsManager() {
   const [editingTrainerId, setEditingTrainerId] = useState<string | null>(null)
   const [deletingTrainerId, setDeletingTrainerId] = useState<string | null>(null)
   const [trainerForm, setTrainerForm] = useState({ name: '', phone: '', password: '1234', role: 'trainer' })
+
+  // Admin self-service: change own password & phone
+  const [adminPassword, setAdminPassword] = useState('')
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState('')
+  const [adminPhone, setAdminPhone] = useState(user?.phone || '')
+  const [savingAdmin, setSavingAdmin] = useState(false)
 
   const isAdmin = user?.role === 'admin'
 
@@ -107,8 +113,12 @@ export default function SettingsManager() {
 
   // Trainer CRUD
   const handleSaveTrainer = async () => {
-    if (!trainerForm.name) {
-      toast({ title: 'خطأ', description: 'يرجى إدخال اسم المدرب', variant: 'destructive' })
+    if (!trainerForm.name || !trainerForm.phone) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال اسم المدرب ورقم الهاتف', variant: 'destructive' })
+      return
+    }
+    if (!editingTrainerId && !trainerForm.password) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال كلمة المرور', variant: 'destructive' })
       return
     }
     try {
@@ -123,7 +133,7 @@ export default function SettingsManager() {
         await fetch('/api/trainers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(trainerForm),
+          body: JSON.stringify({ ...trainerForm, requesterRole: user!.role }),
         })
         toast({ title: 'تمت الإضافة', description: 'تم إضافة المدرب بنجاح' })
       }
@@ -216,6 +226,12 @@ export default function SettingsManager() {
             <Image className="h-4 w-4" />
             البنر
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="account" className="gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+              <KeyRound className="h-4 w-4" />
+              حسابي
+            </TabsTrigger>
+          )}
           {isAdmin && (
             <TabsTrigger value="trainers" className="gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
               <Users className="h-4 w-4" />
@@ -621,6 +637,125 @@ export default function SettingsManager() {
           </Card>
         </TabsContent>
 
+        {/* Account Tab (Admin Only) */}
+        {isAdmin && (
+          <TabsContent value="account">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5 text-emerald-600" />
+                  إعدادات حساب المدير العام
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-4 rounded-lg border bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-5 w-5 text-amber-600" />
+                    <span className="font-semibold">حساب المدير العام</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">يمكنك تغيير رقم الهاتف وكلمة المرور الخاصة بحساب المدير العام فقط من هنا.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-base font-semibold">رقم الهاتف</Label>
+                  <div className="flex items-center gap-3 max-w-md">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="tel"
+                      value={adminPhone}
+                      onChange={(e) => setAdminPhone(e.target.value)}
+                      placeholder="رقم الهاتف"
+                      dir="ltr"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">هذا الرقم يستخدم لتسجيل الدخول</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-base font-semibold">كلمة المرور الجديدة</Label>
+                  <div className="flex items-center gap-3 max-w-md">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="كلمة المرور الجديدة"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-base font-semibold">تأكيد كلمة المرور</Label>
+                  <div className="flex items-center gap-3 max-w-md">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      value={adminPasswordConfirm}
+                      onChange={(e) => setAdminPasswordConfirm(e.target.value)}
+                      placeholder="أعد إدخال كلمة المرور الجديدة"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={async () => {
+                    if (adminPassword && adminPassword !== adminPasswordConfirm) {
+                      toast({ title: 'خطأ', description: 'كلمتا المرور غير متطابقتين', variant: 'destructive' })
+                      return
+                    }
+                    if (!adminPhone) {
+                      toast({ title: 'خطأ', description: 'يرجى إدخال رقم الهاتف', variant: 'destructive' })
+                      return
+                    }
+                    setSavingAdmin(true)
+                    try {
+                      const updateData: { id: string; phone: string; password?: string } = {
+                        id: user!.id,
+                        phone: adminPhone,
+                      }
+                      if (adminPassword) {
+                        updateData.password = adminPassword
+                      }
+                      const res = await fetch('/api/trainers', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updateData),
+                      })
+                      if (res.ok) {
+                        // Update local auth user
+                        const saved = localStorage.getItem('authUser')
+                        if (saved) {
+                          const authData = JSON.parse(saved)
+                          authData.phone = adminPhone
+                          localStorage.setItem('authUser', JSON.stringify(authData))
+                        }
+                        toast({ title: 'تم الحفظ', description: 'تم تحديث بيانات الحساب بنجاح' })
+                        setAdminPassword('')
+                        setAdminPasswordConfirm('')
+                      } else {
+                        toast({ title: 'خطأ', description: 'فشل في تحديث البيانات', variant: 'destructive' })
+                      }
+                    } catch {
+                      toast({ title: 'خطأ', description: 'فشل في تحديث البيانات', variant: 'destructive' })
+                    } finally {
+                      setSavingAdmin(false)
+                    }
+                  }}
+                  disabled={savingAdmin}
+                  className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                >
+                  {savingAdmin ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" />
+                  )}
+                  حفظ التغييرات
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
         {/* Trainers Tab (Admin Only) */}
         {isAdmin && (
           <TabsContent value="trainers">
@@ -724,12 +859,13 @@ export default function SettingsManager() {
               />
             </div>
             <div className="space-y-2">
-              <Label>رقم الهاتف</Label>
+              <Label>رقم الهاتف *</Label>
               <Input
                 type="tel"
                 value={trainerForm.phone}
                 onChange={(e) => setTrainerForm({ ...trainerForm, phone: e.target.value })}
                 placeholder="07XXXXXXXX"
+                dir="ltr"
               />
             </div>
             <div className="space-y-2">
