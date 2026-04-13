@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useSyncExternalStore, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 
 export interface AuthUser {
   id: string
@@ -23,47 +23,27 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
 })
 
-// useSyncExternalStore for reading localStorage safely
-function subscribe(callback: () => void) {
-  window.addEventListener('storage', callback)
-  return () => window.removeEventListener('storage', callback)
-}
-
-function getSnapshot(): string {
-  try {
-    return localStorage.getItem('authUser') || ''
-  } catch {
-    return ''
-  }
-}
-
-function getServerSnapshot(): string {
-  return ''
-}
-
-function parseStoredUser(raw: string): AuthUser | null {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && parsed.id && parsed.name && parsed.role) {
-      return parsed as AuthUser
-    }
-  } catch {
-    // ignore
-  }
-  return null
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isLoading, setIsLoading] = useState(false)
-  const storedUserRaw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  const storedUser = parseStoredUser(storedUserRaw)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Track manually set user (after login, before localStorage updates propagate)
-  const [manualUser, setManualUser] = useState<AuthUser | null>(null)
-
-  // Use manualUser if set, otherwise fall back to storedUser from localStorage
-  const user = manualUser || storedUser
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('authUser')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && parsed.id && parsed.name && parsed.role) {
+          setUser(parsed)
+        } else {
+          localStorage.removeItem('authUser')
+        }
+      }
+    } catch {
+      localStorage.removeItem('authUser')
+    }
+    setIsLoading(false)
+  }, [])
 
   const login = useCallback(async (phone: string, password: string): Promise<boolean> => {
     try {
@@ -83,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.role,
       }
 
-      setManualUser(authUser)
+      setUser(authUser)
       localStorage.setItem('authUser', JSON.stringify(authUser))
       return true
     } catch {
@@ -92,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    setManualUser(null)
+    setUser(null)
     localStorage.removeItem('authUser')
   }, [])
 
