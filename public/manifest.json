@@ -1,6 +1,6 @@
 {
-  "name": "نظام كتابة الكورسات التدريبية",
-  "short_name": "نظام الكورسات",
+  "name": "JAGAUAR COURSE",
+  "short_name": "JAGAUAR",
   "description": "نظام متكامل لإدارة المتدربين والتمارين وإنشاء الكورسات التدريبية",
   "start_url": "/",
   "display": "standalone",

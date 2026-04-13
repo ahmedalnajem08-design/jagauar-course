@@ -42,7 +42,7 @@ export default function LoginPage() {
               className="h-full w-full object-cover"
             />
           </div>
-          <CardTitle className="text-2xl font-bold">نظام الكورسات التدريبية</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-wide">JAGAUAR COURSE</CardTitle>
           <p className="text-muted-foreground text-sm mt-1">سجل دخولك للمتابعة</p>
         </CardHeader>
         <CardContent>

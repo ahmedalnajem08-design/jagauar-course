@@ -65,7 +65,7 @@ function AppContent() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.jpg" alt="شعار" className="h-full w-full object-cover" />
           </div>
-          <span className="font-bold text-lg">نظام الكورسات</span>
+          <span className="font-bold text-lg tracking-wide">JAGAUAR COURSE</span>
         </div>
         <div className="w-10" />
       </div>
@@ -87,8 +87,8 @@ function AppContent() {
                   <img src="/logo.jpg" alt="شعار النظام" className="h-full w-full object-cover" />
                 </div>
                 <div>
-                  <h1 className="font-bold text-lg">نظام الكورسات</h1>
-                  <p className="text-xs text-muted-foreground">إدارة التمارين والمتدربين</p>
+                  <h1 className="font-bold text-lg tracking-wide">JAGAUAR COURSE</h1>
+                  <p className="text-xs text-muted-foreground">إدارة الكورسات التدريبية</p>
                 </div>
               </div>
             </div>

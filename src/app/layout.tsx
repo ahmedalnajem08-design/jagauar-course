@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "نظام كتابة الكورسات التدريبية",
-  description: "نظام متكامل لإدارة المتدربين والتمارين وإنشاء الكورسات التدريبية مع إمكانية الطباعة والمشاركة",
+  title: "JAGAUAR COURSE",
+  description: "نظام متكامل لإدارة المتدربين والتمارين وإنشاء الكورسات التدريبية",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32" },
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   appleWebApp: {
-    title: "نظام الكورسات",
+    title: "JAGAUAR COURSE",
     statusBarStyle: "default",
     capable: true,
   },
