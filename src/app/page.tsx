@@ -11,7 +11,6 @@ import CourseBuilder from '@/components/course/CourseBuilder'
 import CoursesList from '@/components/course/CoursesList'
 import SettingsManager from '@/components/course/SettingsManager'
 import { Users, Dumbbell, PlusCircle, ClipboardList, Settings, Menu, X, LogOut, UserCircle } from 'lucide-react'
-import Image from 'next/image'
 
 const navItems = [
   { id: 'trainees', label: 'المتدربين', icon: Users, roles: ['admin', 'trainer'] },
@@ -39,7 +38,8 @@ function AppContent() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-16 w-16 rounded-xl overflow-hidden">
-            <Image src="/logo.jpg" alt="شعار" width={64} height={64} className="h-full w-full object-cover" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="شعار" className="h-full w-full object-cover" />
           </div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
         </div>
@@ -62,7 +62,8 @@ function AppContent() {
         </Button>
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg overflow-hidden">
-            <Image src="/logo.jpg" alt="شعار" width={32} height={32} className="h-full w-full object-cover" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.jpg" alt="شعار" className="h-full w-full object-cover" />
           </div>
           <span className="font-bold text-lg">نظام الكورسات</span>
         </div>
@@ -82,7 +83,8 @@ function AppContent() {
             <div className="p-6 border-b">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 rounded-xl overflow-hidden shadow-md border border-emerald-200 dark:border-emerald-800">
-                  <Image src="/logo.jpg" alt="شعار النظام" width={48} height={48} className="h-full w-full object-cover" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.jpg" alt="شعار النظام" className="h-full w-full object-cover" />
                 </div>
                 <div>
                   <h1 className="font-bold text-lg">نظام الكورسات</h1>

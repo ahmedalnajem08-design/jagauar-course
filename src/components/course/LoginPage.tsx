@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
 import { useToast } from '@/hooks/use-toast'
 import { Phone, Lock, LogIn, Instagram } from 'lucide-react'
-import Image from 'next/image'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -36,13 +35,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-2xl border-0">
         <CardHeader className="text-center pb-2">
           <div className="mx-auto mb-4 h-24 w-24 rounded-2xl overflow-hidden shadow-lg border-2 border-emerald-200 dark:border-emerald-800">
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/logo.jpg"
               alt="شعار النظام"
-              width={96}
-              height={96}
               className="h-full w-full object-cover"
-              priority
             />
           </div>
           <CardTitle className="text-2xl font-bold">نظام الكورسات التدريبية</CardTitle>
