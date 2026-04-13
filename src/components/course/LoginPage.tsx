@@ -45,14 +45,14 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="phone" className="text-sm font-semibold">رقم الهاتف</Label>
               <div className="relative">
-                <Phone className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="phone"
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="رقم الهاتف"
-                  className="pr-10 h-12"
+                  placeholder="07XXXXXXXX"
+                  className="pl-10 h-12"
                   dir="ltr"
                 />
               </div>
@@ -60,14 +60,15 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-semibold">كلمة المرور</Label>
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="كلمة المرور"
-                  className="pr-10 h-12"
+                  className="pl-10 h-12"
+                  dir="ltr"
                 />
               </div>
             </div>
