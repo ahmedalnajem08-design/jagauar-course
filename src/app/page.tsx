@@ -7,13 +7,15 @@ import TraineesManager from '@/components/course/TraineesManager'
 import ExerciseGroupsManager from '@/components/course/ExerciseGroupsManager'
 import CourseBuilder from '@/components/course/CourseBuilder'
 import CoursesList from '@/components/course/CoursesList'
-import { Users, Dumbbell, PlusCircle, ClipboardList, Menu, X, DumbbellIcon } from 'lucide-react'
+import SettingsManager from '@/components/course/SettingsManager'
+import { Users, Dumbbell, PlusCircle, ClipboardList, Settings, Menu, X } from 'lucide-react'
 
 const navItems = [
   { id: 'trainees', label: 'المتدربين', icon: Users },
   { id: 'exercises', label: 'مجموعات التمارين', icon: Dumbbell },
   { id: 'create', label: 'إنشاء كورس', icon: PlusCircle },
   { id: 'courses', label: 'الكورسات', icon: ClipboardList },
+  { id: 'settings', label: 'الإعدادات', icon: Settings },
 ] as const
 
 type NavId = typeof navItems[number]['id']
@@ -36,7 +38,7 @@ export default function Home() {
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         <div className="flex items-center gap-2">
-          <DumbbellIcon className="h-6 w-6 text-emerald-600" />
+          <Dumbbell className="h-6 w-6 text-emerald-600" />
           <span className="font-bold text-lg">نظام الكورسات</span>
         </div>
         <div className="w-10" />
@@ -110,11 +112,10 @@ export default function Home() {
             {activeTab === 'exercises' && <ExerciseGroupsManager />}
             {activeTab === 'create' && <CourseBuilder onSaved={handleCourseSaved} />}
             {activeTab === 'courses' && <CoursesList refreshTrigger={courseRefresh} />}
+            {activeTab === 'settings' && <SettingsManager />}
           </div>
         </main>
       </div>
-
-      {/* Print Styles - Using global CSS approach via globals.css */}
     </div>
   )
 }
