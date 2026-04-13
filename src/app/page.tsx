@@ -11,6 +11,7 @@ import CourseBuilder from '@/components/course/CourseBuilder'
 import CoursesList from '@/components/course/CoursesList'
 import SettingsManager from '@/components/course/SettingsManager'
 import { Users, Dumbbell, PlusCircle, ClipboardList, Settings, Menu, X, LogOut, UserCircle } from 'lucide-react'
+import Image from 'next/image'
 
 const navItems = [
   { id: 'trainees', label: 'المتدربين', icon: Users, roles: ['admin', 'trainer'] },
@@ -36,7 +37,12 @@ function AppContent() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-16 w-16 rounded-xl overflow-hidden">
+            <Image src="/logo.jpg" alt="شعار" width={64} height={64} className="h-full w-full object-cover" />
+          </div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+        </div>
       </div>
     )
   }
@@ -55,7 +61,9 @@ function AppContent() {
           {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         <div className="flex items-center gap-2">
-          <Dumbbell className="h-6 w-6 text-emerald-600" />
+          <div className="h-8 w-8 rounded-lg overflow-hidden">
+            <Image src="/logo.jpg" alt="شعار" width={32} height={32} className="h-full w-full object-cover" />
+          </div>
           <span className="font-bold text-lg">نظام الكورسات</span>
         </div>
         <div className="w-10" />
@@ -73,8 +81,8 @@ function AppContent() {
             {/* Logo */}
             <div className="p-6 border-b">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-emerald-600 rounded-lg flex items-center justify-center">
-                  <Dumbbell className="h-6 w-6 text-white" />
+                <div className="h-12 w-12 rounded-xl overflow-hidden shadow-md border border-emerald-200 dark:border-emerald-800">
+                  <Image src="/logo.jpg" alt="شعار النظام" width={48} height={48} className="h-full w-full object-cover" />
                 </div>
                 <div>
                   <h1 className="font-bold text-lg">نظام الكورسات</h1>

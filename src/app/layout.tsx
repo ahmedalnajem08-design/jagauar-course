@@ -16,6 +16,19 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "نظام كتابة الكورسات التدريبية",
   description: "نظام متكامل لإدارة المتدربين والتمارين وإنشاء الكورسات التدريبية مع إمكانية الطباعة والمشاركة",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/logo.jpg", sizes: "1024x1024", type: "image/jpeg" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    title: "نظام الكورسات",
+    statusBarStyle: "default",
+    capable: true,
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +38,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#059669" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

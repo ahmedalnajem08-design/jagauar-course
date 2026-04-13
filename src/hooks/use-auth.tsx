@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useSyncExternalStore, ReactNode } from 'react'
 
 export interface AuthUser {
   id: string
@@ -23,18 +23,47 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
 })
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === 'undefined') return null
-    try {
-      const saved = localStorage.getItem('authUser')
-      if (saved) return JSON.parse(saved)
-    } catch {
-      // ignore
+// useSyncExternalStore for reading localStorage safely
+function subscribe(callback: () => void) {
+  window.addEventListener('storage', callback)
+  return () => window.removeEventListener('storage', callback)
+}
+
+function getSnapshot(): string {
+  try {
+    return localStorage.getItem('authUser') || ''
+  } catch {
+    return ''
+  }
+}
+
+function getServerSnapshot(): string {
+  return ''
+}
+
+function parseStoredUser(raw: string): AuthUser | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.id && parsed.name && parsed.role) {
+      return parsed as AuthUser
     }
-    return null
-  })
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
+  const storedUserRaw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  const storedUser = parseStoredUser(storedUserRaw)
+
+  // Track manually set user (after login, before localStorage updates propagate)
+  const [manualUser, setManualUser] = useState<AuthUser | null>(null)
+
+  // Use manualUser if set, otherwise fall back to storedUser from localStorage
+  const user = manualUser || storedUser
 
   const login = useCallback(async (phone: string, password: string): Promise<boolean> => {
     try {
@@ -54,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: data.role,
       }
 
-      setUser(authUser)
+      setManualUser(authUser)
       localStorage.setItem('authUser', JSON.stringify(authUser))
       return true
     } catch {
@@ -63,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    setUser(null)
+    setManualUser(null)
     localStorage.removeItem('authUser')
   }, [])
 
