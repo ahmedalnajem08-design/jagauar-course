@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { defaultPrintSettings, type PrintSettings } from '@/hooks/use-settings'
+import { defaultPrintSettings, type PrintSettings, usePrintSettings } from '@/hooks/use-settings'
 import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings, VenusAndMars } from 'lucide-react'
 import html2canvas from 'html2canvas'
 
@@ -71,33 +71,9 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [activeDay, setActiveDay] = useState('1')
   const [showPrintPreview, setShowPrintPreview] = useState(false)
-  const [printSettings, setPrintSettings] = useState<PrintSettings>(defaultPrintSettings)
+  const { settings: printSettings, reloadSettings } = usePrintSettings()
   const shareRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
-
-  // Load print settings from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('printSettings')
-      if (saved) {
-        setPrintSettings({ ...defaultPrintSettings, ...JSON.parse(saved) })
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  // Reload settings when coming back to this tab
-  const reloadSettings = useCallback(() => {
-    try {
-      const saved = localStorage.getItem('printSettings')
-      if (saved) {
-        setPrintSettings({ ...defaultPrintSettings, ...JSON.parse(saved) })
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
 
   const fetchCourses = useCallback(async () => {
     if (!user) return

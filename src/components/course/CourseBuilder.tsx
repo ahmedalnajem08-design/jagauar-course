@@ -66,7 +66,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     if (!user) return
     try {
       const [tRes, gRes] = await Promise.all([
-        fetch(`/api/trainees?trainerId=${user.id}`),
+        fetch('/api/trainees'),
         fetch(`/api/exercise-groups?trainerId=${user.id}`),
       ])
       const tData = await tRes.json()
