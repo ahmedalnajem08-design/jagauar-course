@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { Plus, Pencil, Trash2, Users, Weight, Ruler, Calendar, User, Phone, VenusAndMars } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, Weight, Ruler, Calendar, User, Phone, VenusAndMars, Search } from 'lucide-react'
 
 interface Trainee {
   id: string
@@ -35,12 +35,13 @@ export default function TraineesManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [searchQuery, setSearchQuery] = useState('')
   const { toast } = useToast()
 
   const fetchTrainees = useCallback(async () => {
-    if (!user) return
     try {
-      const res = await fetch(`/api/trainees?trainerId=${user.id}`)
+      // جلب كل المتدربين بدون تصفية حسب المدرب
+      const res = await fetch('/api/trainees')
       const data = await res.json()
       setTrainees(data)
     } catch {
@@ -48,9 +49,19 @@ export default function TraineesManager() {
     } finally {
       setLoading(false)
     }
-  }, [toast, user])
+  }, [toast])
 
   useEffect(() => { fetchTrainees() }, [fetchTrainees])
+
+  // تصفية المتدربين حسب البحث (اسم أو رقم هاتف)
+  const filteredTrainees = trainees.filter((t) => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.trim().toLowerCase()
+    return (
+      t.name.toLowerCase().includes(query) ||
+      t.phone.toLowerCase().includes(query)
+    )
+  })
 
   const handleSave = async () => {
     if (!form.name || !form.weight || !form.height || !form.age) {
@@ -117,7 +128,7 @@ export default function TraineesManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
             <Users className="h-6 w-6 text-emerald-600" />
@@ -127,27 +138,52 @@ export default function TraineesManager() {
             <p className="text-muted-foreground">{trainees.length} متدرب مسجل</p>
           </div>
         </div>
-        <Button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-          <Plus className="h-4 w-4" />
-          إضافة متدرب
-        </Button>
+        <div className="flex items-center gap-3">
+          {/* حقل البحث */}
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="بحث بالاسم أو الرقم..."
+              className="pr-10 w-64"
+            />
+          </div>
+          <Button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+            <Plus className="h-4 w-4" />
+            إضافة متدرب
+          </Button>
+        </div>
       </div>
 
-      {trainees.length === 0 ? (
+      {/* عدد نتائج البحث */}
+      {searchQuery.trim() && (
+        <p className="text-sm text-muted-foreground">
+          {filteredTrainees.length} نتيجة بحث من أصل {trainees.length} متدرب
+        </p>
+      )}
+
+      {filteredTrainees.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">لا يوجد متدربين</h3>
-            <p className="text-muted-foreground mb-4">ابدأ بإضافة متدرب جديد</p>
-            <Button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-              <Plus className="h-4 w-4" />
-              إضافة متدرب
-            </Button>
+            <h3 className="text-lg font-semibold mb-2">
+              {searchQuery.trim() ? 'لا توجد نتائج بحث' : 'لا يوجد متدربين'}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {searchQuery.trim() ? 'جرب البحث بكلمات أخرى' : 'ابدأ بإضافة متدرب جديد'}
+            </p>
+            {!searchQuery.trim() && (
+              <Button onClick={openAdd} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                <Plus className="h-4 w-4" />
+                إضافة متدرب
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {trainees.map((t) => (
+          {filteredTrainees.map((t) => (
             <Card key={t.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">

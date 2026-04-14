@@ -94,3 +94,8 @@ model CourseDayExercise {
   customReps   Int?
   order        Int        @default(0)
 }
+
+model Setting {
+  key   String @id
+  value String
+}

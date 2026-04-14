@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useSyncExternalStore } from 'react'
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react'
 
 export interface PrintSettings {
   gymName: string
@@ -42,7 +42,7 @@ export const defaultPrintSettings: PrintSettings = {
   pageSize: 'A4',
 }
 
-function getStoredPrintSettings(): PrintSettings {
+function getLocalPrintSettings(): PrintSettings {
   try {
     const saved = localStorage.getItem('printSettings')
     if (saved) {
@@ -55,25 +55,93 @@ function getStoredPrintSettings(): PrintSettings {
 }
 
 export function usePrintSettings() {
-  const [settings, setSettings] = useState<PrintSettings>(getStoredPrintSettings)
+  const [settings, setSettings] = useState<PrintSettings>(getLocalPrintSettings)
+  const [loaded, setLoaded] = useState(false)
+
+  // Load from server on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === 'object' && !data.error) {
+          const parsed: Partial<PrintSettings> = {}
+          // Parse boolean and number values
+          for (const [key, value] of Object.entries(data)) {
+            if (key in defaultPrintSettings) {
+              const defVal = defaultPrintSettings[key as keyof PrintSettings]
+              if (typeof defVal === 'boolean') {
+                parsed[key as keyof PrintSettings] = value === 'true' as any
+              } else if (typeof defVal === 'number') {
+                parsed[key as keyof PrintSettings] = Number(value) as any
+              } else {
+                parsed[key as keyof PrintSettings] = value as any
+              }
+            }
+          }
+          const merged = { ...defaultPrintSettings, ...parsed }
+          setSettings(merged)
+          // Also save to localStorage for offline use
+          try {
+            localStorage.setItem('printSettings', JSON.stringify(merged))
+          } catch { /* ignore */ }
+        }
+        setLoaded(true)
+      })
+      .catch(() => {
+        setLoaded(true)
+      })
+  }, [])
 
   const saveSettings = useCallback((newSettings: Partial<PrintSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings }
+      // Save to localStorage immediately for offline
       try {
         localStorage.setItem('printSettings', JSON.stringify(updated))
-      } catch {
-        // ignore
+      } catch { /* ignore */ }
+      // Save to server (cloud) for all users
+      const settingsForServer: Record<string, string> = {}
+      for (const [key, value] of Object.entries(updated)) {
+        settingsForServer[key] = String(value)
       }
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: settingsForServer }),
+      }).catch(() => { /* ignore server errors, localStorage is backup */ })
       return updated
     })
   }, [])
 
   const reloadSettings = useCallback(() => {
-    setSettings(getStoredPrintSettings())
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === 'object' && !data.error) {
+          const parsed: Partial<PrintSettings> = {}
+          for (const [key, value] of Object.entries(data)) {
+            if (key in defaultPrintSettings) {
+              const defVal = defaultPrintSettings[key as keyof PrintSettings]
+              if (typeof defVal === 'boolean') {
+                parsed[key as keyof PrintSettings] = value === 'true' as any
+              } else if (typeof defVal === 'number') {
+                parsed[key as keyof PrintSettings] = Number(value) as any
+              } else {
+                parsed[key as keyof PrintSettings] = value as any
+              }
+            }
+          }
+          const merged = { ...defaultPrintSettings, ...parsed }
+          setSettings(merged)
+          try {
+            localStorage.setItem('printSettings', JSON.stringify(merged))
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  return { settings, saveSettings, reloadSettings }
+  return { settings, saveSettings, reloadSettings, loaded }
 }
 
 // Theme management using a simple subscription pattern

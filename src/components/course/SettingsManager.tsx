@@ -774,7 +774,7 @@ export default function SettingsManager() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  إدارة حسابات المدربين. كل مدرب يرى بياناته الخاصة فقط (المتدربين، المجموعات، الكورسات).
+                  إدارة حسابات المدربين. المتدربين والإعدادات مشتركة بين جميع المدربين.
                 </p>
                 <div className="space-y-3">
                   {trainers.map((t) => (
