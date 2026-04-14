@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -10,6 +8,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     ".space.chatglm.site",
     ".space.z.ai",
+    ".vercel.app",
   ],
 };
 
