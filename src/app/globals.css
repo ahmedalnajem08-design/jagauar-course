@@ -123,12 +123,28 @@
 
 /* Print Styles */
 @media print {
-  /* Hide everything except print area */
+  /* Hide sidebar, header, and no-print elements */
   .app-sidebar,
   .app-header,
-  .app-content,
   .no-print {
     display: none !important;
+  }
+
+  /* Strip app-content styling but keep it visible for #print-area */
+  .app-content {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    flex: none !important;
+  }
+
+  .app-content > div {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
   }
 
   /* Show only the print area */
@@ -144,5 +160,15 @@
     background: white !important;
     margin: 0 !important;
     padding: 0 !important;
+  }
+
+  /* Ensure outer wrapper doesn't add spacing */
+  .min-h-screen {
+    min-height: auto !important;
+  }
+
+  /* Hide app-layout flex wrapper properly */
+  .app-layout {
+    display: block !important;
   }
 }

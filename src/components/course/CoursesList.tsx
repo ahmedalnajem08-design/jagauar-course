@@ -113,40 +113,93 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   }
 
   const captureAndDownload = async () => {
-    if (!shareRef.current) return
+    const el = shareRef.current
+    if (!el) {
+      toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
+      return
+    }
     try {
-      const canvas = await html2canvas(shareRef.current, {
+      // Temporarily move element on-screen for proper rendering
+      const originalStyle = el.parentElement?.style
+      if (originalStyle) {
+        originalStyle.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 0; pointer-events: none;'
+      }
+      // Wait for render
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      const canvas = await html2canvas(el, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
+        allowTaint: true,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
       })
+
+      // Restore off-screen position
+      if (originalStyle) {
+        originalStyle.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      }
+
       const link = document.createElement('a')
       link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
       link.href = canvas.toDataURL('image/jpeg', 0.95)
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
       toast({ title: 'تم التحميل', description: 'تم تحميل صورة الكورس بنجاح' })
-    } catch {
+    } catch (err) {
+      // Restore off-screen position on error
+      const parent = shareRef.current?.parentElement
+      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      console.error('Image capture error:', err)
       toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
     }
   }
 
   const shareViaWhatsApp = async () => {
-    if (!shareRef.current) return
+    const el = shareRef.current
+    if (!el) {
+      toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
+      return
+    }
     try {
-      const canvas = await html2canvas(shareRef.current, {
+      // Temporarily move element on-screen for proper rendering
+      const originalStyle = el.parentElement?.style
+      if (originalStyle) {
+        originalStyle.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 0; pointer-events: none;'
+      }
+      // Wait for render
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      const canvas = await html2canvas(el, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
         logging: false,
+        allowTaint: true,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
       })
+
+      // Restore off-screen position
+      if (originalStyle) {
+        originalStyle.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      }
+
       canvas.toBlob(async (blob) => {
-        if (!blob) return
+        if (!blob) {
+          toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
+          return
+        }
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
         link.href = url
+        document.body.appendChild(link)
         link.click()
+        document.body.removeChild(link)
         URL.revokeObjectURL(url)
 
         const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
@@ -159,7 +212,11 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         window.open(whatsappUrl, '_blank')
         toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. قم بإرفاق الصورة المحملة.' })
       }, 'image/jpeg', 0.95)
-    } catch {
+    } catch (err) {
+      // Restore off-screen position on error
+      const parent = shareRef.current?.parentElement
+      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      console.error('Share error:', err)
       toast({ title: 'خطأ', description: 'فشل في مشاركة الكورس', variant: 'destructive' })
     }
   }
