@@ -69,7 +69,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     try {
       const [tRes, gRes] = await Promise.all([
         fetch('/api/trainees'),
-        fetch('/api/exercise-groups'), // جلب كل مجموعات التمارين بدون تصفية
+        fetch(`/api/exercise-groups?trainerId=${user.id}`),
       ])
       const tData = await tRes.json()
       const gData = await gRes.json()

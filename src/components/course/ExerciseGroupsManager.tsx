@@ -50,9 +50,9 @@ export default function ExerciseGroupsManager() {
   const { toast } = useToast()
 
   const fetchGroups = useCallback(async () => {
+    if (!user) return
     try {
-      // جلب كل مجموعات التمارين بدون تصفية حسب المدرب
-      const res = await fetch('/api/exercise-groups')
+      const res = await fetch(`/api/exercise-groups?trainerId=${user.id}`)
       const data = await res.json()
       setGroups(data)
     } catch {
@@ -60,7 +60,7 @@ export default function ExerciseGroupsManager() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [toast, user])
 
   useEffect(() => { fetchGroups() }, [fetchGroups])
 
