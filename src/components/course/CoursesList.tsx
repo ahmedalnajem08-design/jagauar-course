@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -74,9 +74,8 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   const [activeDay, setActiveDay] = useState('1')
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [pdfAction, setPdfAction] = useState(false)
+  const [whatsappMode, setWhatsappMode] = useState(false)
   const { settings: printSettings, reloadSettings } = usePrintSettings()
-  const pdfDoneRef = useRef(false)
   const { toast } = useToast()
 
   const fetchCourses = useCallback(async () => {
@@ -94,109 +93,108 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
 
   useEffect(() => { fetchCourses(); reloadSettings() }, [fetchCourses, refreshTrigger, reloadSettings])
 
-  // PDF Generation via useEffect - ensures component has rendered the print-area before capturing
-  useEffect(() => {
-    if (!pdfAction || !showPrintPreview || !selectedCourse || isGenerating) return
-    if (pdfDoneRef.current) return
-    pdfDoneRef.current = true
+  // Generate PDF from the currently visible print-area element
+  const handleGeneratePDF = async () => {
+    if (!selectedCourse) return
+    setIsGenerating(true)
 
-    const performPDFGeneration = async () => {
-      setIsGenerating(true)
+    try {
+      const el = document.getElementById('print-area')
+      if (!el) {
+        toast({ title: 'خطأ', description: 'محتوى الكورس غير موجود', variant: 'destructive' })
+        setIsGenerating(false)
+        return
+      }
 
-      // Wait for the print-area to be fully rendered on screen
-      await new Promise(r => setTimeout(r, 1500))
+      // Check element is visible
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) {
+        toast({ title: 'خطأ', description: 'محتوى الكورس غير مرئي بعد، انتظر قليلاً', variant: 'destructive' })
+        setIsGenerating(false)
+        return
+      }
 
-      try {
-        const el = document.getElementById('print-area')
-        if (!el) {
-          toast({ title: 'خطأ', description: 'فشل في العثور على محتوى الكورس', variant: 'destructive' })
-          cleanup()
-          return
-        }
+      // Capture the rendered content with html2canvas
+      // CRITICAL: allowTaint must be false, otherwise toDataURL() throws SecurityError
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+      })
 
-        // Capture the rendered content with html2canvas
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: true,
-          allowTaint: true,
-          width: el.scrollWidth,
-          height: el.scrollHeight,
-          onclone: (clonedDoc) => {
-            // Ensure the cloned element is visible and properly positioned
-            const clonedEl = clonedDoc.getElementById('print-area')
-            if (clonedEl) {
-              clonedEl.style.position = 'relative'
-              clonedEl.style.left = '0'
-              clonedEl.style.top = '0'
-              clonedEl.style.overflow = 'visible'
-            }
+      // Verify canvas is valid
+      if (canvas.width === 0 || canvas.height === 0) {
+        toast({ title: 'خطأ', description: 'فشل في التقاط المحتوى - المحتوى فارغ', variant: 'destructive' })
+        setIsGenerating(false)
+        return
+      }
+
+      // Create PDF from canvas
+      const imgData = canvas.toDataURL('image/jpeg', 0.92)
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+
+      // Determine page format
+      const format = printSettings.pageSize === 'A5' ? 'a5' : printSettings.pageSize === 'Letter' ? 'letter' : 'a4'
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: format,
+      })
+
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const margin = 10
+      const contentWidth = pdfWidth - 2 * margin
+      const scaleFactor = contentWidth / imgWidth
+      const contentHeight = imgHeight * scaleFactor
+
+      // If content fits on one page
+      if (contentHeight <= pdfHeight - 2 * margin) {
+        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight)
+      } else {
+        // Multi-page: split the image across pages
+        const availableHeight = pdfHeight - 2 * margin
+        const srcPageHeight = availableHeight / scaleFactor
+        let currentY = 0
+        let pageNum = 0
+
+        while (currentY < imgHeight) {
+          if (pageNum > 0) pdf.addPage()
+
+          const pageCanvas = document.createElement('canvas')
+          pageCanvas.width = imgWidth
+          const sliceHeight = Math.min(Math.ceil(srcPageHeight), imgHeight - currentY)
+          pageCanvas.height = sliceHeight
+
+          const ctx = pageCanvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(
+              canvas,
+              0, currentY, imgWidth, sliceHeight,
+              0, 0, imgWidth, sliceHeight
+            )
           }
-        })
 
-        // Create PDF from canvas
-        const imgData = canvas.toDataURL('image/jpeg', 0.92)
-        const imgWidth = canvas.width
-        const imgHeight = canvas.height
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92)
+          const slicePdfHeight = sliceHeight * scaleFactor
+          pdf.addImage(pageImgData, 'JPEG', margin, margin, contentWidth, slicePdfHeight)
 
-        // Determine page format
-        const format = printSettings.pageSize === 'A5' ? 'a5' : printSettings.pageSize === 'Letter' ? 'letter' : 'a4'
-
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: format,
-        })
-
-        const pdfWidth = pdf.internal.pageSize.getWidth()
-        const pdfHeight = pdf.internal.pageSize.getHeight()
-        const margin = 10
-        const contentWidth = pdfWidth - 2 * margin
-        const scaleFactor = contentWidth / imgWidth
-        const contentHeight = imgHeight * scaleFactor
-
-        // If content fits on one page
-        if (contentHeight <= pdfHeight - 2 * margin) {
-          pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight)
-        } else {
-          // Multi-page: split the image across pages
-          const availableHeight = pdfHeight - 2 * margin
-          const srcPageHeight = availableHeight / scaleFactor
-          let currentY = 0
-          let pageNum = 0
-
-          while (currentY < imgHeight) {
-            if (pageNum > 0) pdf.addPage()
-
-            const pageCanvas = document.createElement('canvas')
-            pageCanvas.width = imgWidth
-            const sliceHeight = Math.min(Math.ceil(srcPageHeight), imgHeight - currentY)
-            pageCanvas.height = sliceHeight
-
-            const ctx = pageCanvas.getContext('2d')
-            if (ctx) {
-              ctx.drawImage(
-                canvas,
-                0, currentY, imgWidth, sliceHeight,
-                0, 0, imgWidth, sliceHeight
-              )
-            }
-
-            const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92)
-            const slicePdfHeight = sliceHeight * scaleFactor
-            pdf.addImage(pageImgData, 'JPEG', margin, margin, contentWidth, slicePdfHeight)
-
-            currentY += Math.ceil(srcPageHeight)
-            pageNum++
-          }
+          currentY += Math.ceil(srcPageHeight)
+          pageNum++
         }
+      }
 
-        // Save the PDF
-        const fileName = `كورس_${selectedCourse.trainee.name || 'متدرب'}.pdf`
-        pdf.save(fileName)
+      // Save the PDF
+      const fileName = `كورس_${selectedCourse.trainee.name || 'متدرب'}.pdf`
+      pdf.save(fileName)
 
-        // Format phone and open WhatsApp
+      // If WhatsApp mode, open WhatsApp too
+      if (whatsappMode) {
         const traineePhone = selectedCourse.trainee.phone
         if (traineePhone) {
           let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
@@ -217,30 +215,21 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         } else {
           toast({ title: 'تم تحميل PDF', description: 'لا يوجد رقم هاتف للمتدرب. تم تحميل الملف فقط.', duration: 5000 })
         }
-      } catch (err) {
-        console.error('PDF generation error:', err)
-        toast({ title: 'خطأ', description: 'فشل في إنشاء ملف PDF', variant: 'destructive' })
+      } else {
+        toast({ title: 'تم التحميل', description: 'تم تحميل ملف PDF بنجاح', duration: 3000 })
       }
-
-      cleanup()
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      toast({
+        title: 'خطأ في إنشاء PDF',
+        description: errorMsg || 'خطأ غير معروف',
+        variant: 'destructive',
+        duration: 8000
+      })
     }
 
-    const cleanup = () => {
-      setPdfAction(false)
-      pdfDoneRef.current = false
-      setIsGenerating(false)
-      setTimeout(() => setShowPrintPreview(false), 500)
-    }
-
-    performPDFGeneration()
-  }, [pdfAction, showPrintPreview, selectedCourse, isGenerating, printSettings, toast])
-
-  // Start PDF generation for WhatsApp
-  const startPDFWhatsApp = () => {
-    pdfDoneRef.current = false
-    reloadSettings()
-    setPdfAction(true)
-    setShowPrintPreview(true)
+    setIsGenerating(false)
   }
 
   const handleDelete = async () => {
@@ -263,8 +252,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
 
   const closePrintPreview = () => {
     setShowPrintPreview(false)
-    setPdfAction(false)
-    pdfDoneRef.current = false
+    setWhatsappMode(false)
   }
 
   if (loading) {
@@ -279,22 +267,31 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   if (showPrintPreview && selectedCourse) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between no-print">
+        <div className="flex items-center justify-between no-print flex-wrap gap-2">
           <Button variant="outline" onClick={closePrintPreview} className="gap-2">
             <ArrowRight className="h-4 w-4" />
             رجوع
           </Button>
-          {isGenerating ? (
-            <div className="flex items-center gap-2 text-emerald-600">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-600" />
-              <span className="text-sm font-medium">جارٍ تجهيز ملف PDF...</span>
-            </div>
-          ) : (
+          <div className="flex gap-2">
             <Button onClick={doPrint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
               <Printer className="h-4 w-4" />
-              طباعة الآن
+              طباعة
             </Button>
-          )}
+            <Button
+              onClick={handleGeneratePDF}
+              disabled={isGenerating}
+              className={whatsappMode ? 'bg-green-600 hover:bg-green-700 gap-2' : 'bg-blue-600 hover:bg-blue-700 gap-2'}
+            >
+              {isGenerating ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              ) : whatsappMode ? (
+                <MessageCircle className="h-4 w-4" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {isGenerating ? 'جارٍ التجهيز...' : whatsappMode ? 'تحميل PDF + واتساب' : 'تحميل PDF'}
+            </Button>
+          </div>
         </div>
         <div id="print-area">
           <CoursePrintContent course={selectedCourse} settings={printSettings} />
@@ -323,7 +320,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         {/* Action Buttons */}
         <div className="grid grid-cols-3 gap-3">
           <Button
-            onClick={() => { reloadSettings(); setShowPrintPreview(true) }}
+            onClick={() => { reloadSettings(); setWhatsappMode(false); setShowPrintPreview(true) }}
             variant="outline"
             className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-all"
           >
@@ -333,7 +330,6 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           <Button
             onClick={() => { reloadSettings(); setShareDialogOpen(true) }}
             className="h-auto py-4 flex flex-col items-center gap-2 bg-green-600 hover:bg-green-700 transition-all"
-            disabled={isGenerating}
           >
             <MessageCircle className="h-6 w-6" />
             <span className="text-sm font-semibold">واتساب PDF</span>
@@ -502,10 +498,10 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                 <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-300">
                   <p className="font-semibold mb-1">كيفية الإرسال:</p>
                   <ol className="list-decimal list-inside space-y-1">
-                    <li>اضغط &quot;إرسال PDF عبر واتساب&quot;</li>
-                    <li>سيتم تحميل ملف PDF تلقائياً على جهازك</li>
-                    <li>سيتم فتح واتساب على رقم المتدرب</li>
-                    <li>أرفق ملف PDF من جهازك وأرسله</li>
+                    <li>اضغط &quot;متابعة&quot;</li>
+                    <li>ستظهر معاينة الكورس - اضغط &quot;تحميل PDF + واتساب&quot;</li>
+                    <li>سيتم تحميل ملف PDF تلقائياً</li>
+                    <li>سيتم فتح واتساب - أرفق الملف وأرسله</li>
                   </ol>
                 </div>
               )}
@@ -514,17 +510,15 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
               <Button
                 onClick={() => {
                   setShareDialogOpen(false)
-                  startPDFWhatsApp()
+                  setWhatsappMode(true)
+                  reloadSettings()
+                  setShowPrintPreview(true)
                 }}
-                disabled={!selectedCourse.trainee.phone || isGenerating}
+                disabled={!selectedCourse.trainee.phone}
                 className="w-full bg-green-600 hover:bg-green-700 gap-2 h-12 text-base"
               >
-                {isGenerating ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                ) : (
-                  <FileText className="h-5 w-5" />
-                )}
-                {isGenerating ? 'جارٍ تجهيز PDF...' : 'إرسال PDF عبر واتساب'}
+                <MessageCircle className="h-5 w-5" />
+                متابعة
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -650,7 +644,6 @@ function CoursePrintContent({ course, settings }: {
           <img
             src={settings.bannerImage}
             alt="بنر"
-            crossOrigin="anonymous"
             style={{
               width: '100%',
               height: `${settings.bannerHeight}px`,
@@ -675,7 +668,6 @@ function CoursePrintContent({ course, settings }: {
             <img
               src={settings.gymLogo}
               alt="شعار"
-              crossOrigin="anonymous"
               style={{ width: `${settings.logoSize}px`, height: `${settings.logoSize}px`, objectFit: 'contain', borderRadius: '8px' }}
             />
           )}
