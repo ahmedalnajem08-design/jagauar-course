@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { defaultPrintSettings, type PrintSettings, usePrintSettings } from '@/hooks/use-settings'
-import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings, VenusAndMars } from 'lucide-react'
+import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings, VenusAndMars, Image, FileText, MessageCircle } from 'lucide-react'
 import html2canvas from 'html2canvas'
 
 interface CourseDayExercise {
@@ -72,6 +72,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [activeDay, setActiveDay] = useState('1')
   const [showPrintPreview, setShowPrintPreview] = useState(false)
+  const [isCapturing, setIsCapturing] = useState(false)
   const { settings: printSettings, reloadSettings } = usePrintSettings()
   const shareRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
@@ -113,20 +114,17 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
     setShowPrintPreview(false)
   }
 
-  const captureAndDownload = async () => {
+  const captureCanvas = async (): Promise<HTMLCanvasElement | null> => {
     const el = shareRef.current
-    if (!el) {
-      toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
-      return
-    }
+    if (!el) return null
     try {
       // Temporarily move element on-screen for proper rendering
-      const originalStyle = el.parentElement?.style
-      if (originalStyle) {
-        originalStyle.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 0; pointer-events: none;'
+      const parent = el.parentElement
+      if (parent) {
+        parent.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 1; pointer-events: none;'
       }
       // Wait for render
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise(resolve => setTimeout(resolve, 500))
 
       const canvas = await html2canvas(el, {
         scale: 2,
@@ -139,10 +137,27 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
       })
 
       // Restore off-screen position
-      if (originalStyle) {
-        originalStyle.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      if (parent) {
+        parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
       }
+      return canvas
+    } catch (err) {
+      // Restore off-screen position on error
+      const parent = shareRef.current?.parentElement
+      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      console.error('Image capture error:', err)
+      return null
+    }
+  }
 
+  const captureAndDownload = async () => {
+    setIsCapturing(true)
+    try {
+      const canvas = await captureCanvas()
+      if (!canvas) {
+        toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
+        return
+      }
       const link = document.createElement('a')
       link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
       link.href = canvas.toDataURL('image/jpeg', 0.95)
@@ -150,91 +165,61 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
       link.click()
       document.body.removeChild(link)
       toast({ title: 'تم التحميل', description: 'تم تحميل صورة الكورس بنجاح' })
-    } catch (err) {
-      // Restore off-screen position on error
-      const parent = shareRef.current?.parentElement
-      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
-      console.error('Image capture error:', err)
-      toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
+    } finally {
+      setIsCapturing(false)
     }
   }
 
   const shareViaWhatsApp = async () => {
-    const el = shareRef.current
-    if (!el) {
-      toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
-      return
-    }
-
     const traineePhone = selectedCourse?.trainee.phone
     if (!traineePhone) {
       toast({ title: 'خطأ', description: 'لا يوجد رقم هاتف للمتدرب. أضف رقم الهاتف أولاً.', variant: 'destructive' })
       return
     }
 
+    setIsCapturing(true)
     try {
-      // Temporarily move element on-screen for proper rendering
-      const originalStyle = el.parentElement?.style
-      if (originalStyle) {
-        originalStyle.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 0; pointer-events: none;'
-      }
-      await new Promise(resolve => setTimeout(resolve, 300))
-
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-      })
-
-      // Restore off-screen position
-      if (originalStyle) {
-        originalStyle.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
+      const canvas = await captureCanvas()
+      if (!canvas) {
+        toast({ title: 'خطأ', description: 'فشل في إنشاء صورة الكورس', variant: 'destructive' })
+        return
       }
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
-          return
-        }
-        // Download the image
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
-        link.href = url
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
+      // Download image first so user can attach it manually
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+      const link = document.createElement('a')
+      link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
+      link.href = dataUrl
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
 
-        // Format phone number for WhatsApp (remove leading 0, add Iraq country code 964)
-        let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
-        if (formattedPhone.startsWith('0')) {
-          formattedPhone = '964' + formattedPhone.substring(1)
-        } else if (!formattedPhone.startsWith('964') && !formattedPhone.startsWith('+')) {
-          formattedPhone = '964' + formattedPhone
-        }
-        // Remove any remaining +
-        formattedPhone = formattedPhone.replace('+', '')
+      // Format phone number for WhatsApp (remove leading 0, add Iraq country code 964)
+      let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
+      if (formattedPhone.startsWith('0')) {
+        formattedPhone = '964' + formattedPhone.substring(1)
+      } else if (!formattedPhone.startsWith('964') && !formattedPhone.startsWith('+')) {
+        formattedPhone = '964' + formattedPhone
+      }
+      formattedPhone = formattedPhone.replace('+', '')
 
-        const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
-          (selectedCourse?.days.map((day) =>
-            `اليوم ${day.dayNumber}:\n` +
-            day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
-          ).join('\n\n') || '')
+      // Build text message
+      const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
+        (selectedCourse?.days.map((day) =>
+          `اليوم ${day.dayNumber}:\n` +
+          day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
+        ).join('\n\n') || '')
 
-        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`
-        window.open(whatsappUrl, '_blank')
-        toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب على رقم المتدرب. قم بإرفاق الصورة المحملة.' })
-      }, 'image/jpeg', 0.95)
+      // Open WhatsApp with phone number and text
+      const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`
+      window.open(whatsappUrl, '_blank')
+
+      toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. قم بإرفاق الصورة المحملة من جهازك.', duration: 8000 })
     } catch (err) {
-      const parent = shareRef.current?.parentElement
-      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
       console.error('Share error:', err)
       toast({ title: 'خطأ', description: 'فشل في مشاركة الكورس', variant: 'destructive' })
+    } finally {
+      setIsCapturing(false)
     }
   }
 
@@ -271,7 +256,8 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   if (selectedCourse) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        {/* Header with course info */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => setSelectedCourse(null)}>
               <ArrowRight className="h-5 w-5" />
@@ -281,16 +267,49 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
               <p className="text-muted-foreground">{selectedCourse.numberOfDays} أيام | المدرب: {selectedCourse.trainer.name}</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => { reloadSettings(); setShowPrintPreview(true) }} variant="outline" className="gap-2">
-              <Printer className="h-4 w-4" />
-              طباعة
-            </Button>
-            <Button onClick={() => { reloadSettings(); setShareDialogOpen(true) }} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-              <Share2 className="h-4 w-4" />
-              مشاركة
-            </Button>
-          </div>
+        </div>
+
+        {/* Action Buttons - Prominent and clear */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Button
+            onClick={() => { reloadSettings(); setShowPrintPreview(true) }}
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-all"
+          >
+            <Printer className="h-6 w-6 text-emerald-600" />
+            <span className="text-sm font-semibold">طباعة</span>
+          </Button>
+          <Button
+            onClick={() => { reloadSettings(); captureAndDownload() }}
+            variant="outline"
+            disabled={isCapturing}
+            className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
+          >
+            {isCapturing ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+            ) : (
+              <Image className="h-6 w-6 text-blue-600" />
+            )}
+            <span className="text-sm font-semibold">حفظ كصورة</span>
+          </Button>
+          <Button
+            onClick={() => { reloadSettings(); setShareDialogOpen(true) }}
+            className="h-auto py-4 flex flex-col items-center gap-2 bg-green-600 hover:bg-green-700 transition-all"
+          >
+            <MessageCircle className="h-6 w-6" />
+            <span className="text-sm font-semibold">واتساب</span>
+          </Button>
+          <Button
+            onClick={() => {
+              setDeletingId(selectedCourse.id)
+              setDeleteDialogOpen(true)
+            }}
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-all text-red-600"
+          >
+            <Trash2 className="h-6 w-6" />
+            <span className="text-sm font-semibold">حذف</span>
+          </Button>
         </div>
 
         {/* Trainee Info */}
@@ -433,33 +452,58 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
           <DialogContent className="sm:max-w-md" dir="rtl">
             <DialogHeader>
-              <DialogTitle>مشاركة الكورس</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-green-600" />
+                مشاركة الكورس عبر واتساب
+              </DialogTitle>
             </DialogHeader>
             <div className="py-4 space-y-4">
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm">
                 <Phone className="h-4 w-4 text-emerald-600" />
                 <span>رقم المتدرب: <strong dir="ltr">{selectedCourse.trainee.phone || 'غير محدد'}</strong></span>
               </div>
-              {!selectedCourse.trainee.phone && (
+              {!selectedCourse.trainee.phone ? (
                 <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-300">
                   لا يوجد رقم هاتف للمتدرب. أضف رقم الهاتف من صفحة المتدربين لتفعيل المشاركة عبر واتساب.
                 </div>
+              ) : (
+                <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-300">
+                  <p className="font-semibold mb-1">كيفية الإرسال:</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>اضغط &quot;إرسال عبر واتساب&quot;</li>
+                    <li>سيتم تحميل صورة الكورس تلقائياً</li>
+                    <li>سيتم فتح واتساب على رقم المتدرب</li>
+                    <li>أرفق الصورة المحملة من جهازك وأرسلها</li>
+                  </ol>
+                </div>
               )}
-              <p className="text-xs text-muted-foreground">سيتم تحميل صورة الكورس ثم فتح واتساب على رقم المتدرب. قم بإرفاق الصورة المحملة يدوياً.</p>
             </div>
             <DialogFooter className="gap-2 flex-col">
-              <Button onClick={shareViaWhatsApp} disabled={!selectedCourse.trainee.phone} className="w-full bg-green-600 hover:bg-green-700 gap-2">
-                <Share2 className="h-4 w-4" />
-                إرسال عبر واتساب
+              <Button
+                onClick={async () => {
+                  setShareDialogOpen(false)
+                  await shareViaWhatsApp()
+                }}
+                disabled={!selectedCourse.trainee.phone || isCapturing}
+                className="w-full bg-green-600 hover:bg-green-700 gap-2 h-12 text-base"
+              >
+                {isCapturing ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                ) : (
+                  <MessageCircle className="h-5 w-5" />
+                )}
+                {isCapturing ? 'جارٍ التحضير...' : 'إرسال عبر واتساب'}
               </Button>
-              <Button onClick={captureAndDownload} variant="outline" className="w-full gap-2">
-                <Download className="h-4 w-4" />
-                تحميل كصورة JPG
-              </Button>
-              <Button onClick={() => { setShareDialogOpen(false); setShowPrintPreview(true) }} variant="outline" className="w-full gap-2">
-                <Printer className="h-4 w-4" />
-                طباعة / حفظ كـ PDF
-              </Button>
+              <div className="grid grid-cols-2 gap-2 w-full">
+                <Button onClick={() => { setShareDialogOpen(false); captureAndDownload() }} variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تحميل كصورة
+                </Button>
+                <Button onClick={() => { setShareDialogOpen(false); setShowPrintPreview(true) }} variant="outline" className="gap-2">
+                  <Printer className="h-4 w-4" />
+                  طباعة / PDF
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
