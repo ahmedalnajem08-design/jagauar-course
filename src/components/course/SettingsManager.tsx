@@ -490,7 +490,7 @@ export default function SettingsManager() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Printer className="h-5 w-5 text-emerald-600" />
-                تنسيق جدول التمارين
+                تنسيق جدول التمارين والطباعة
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -539,6 +539,89 @@ export default function SettingsManager() {
                   <option value="A5">A5</option>
                   <option value="Letter">Letter</option>
                 </select>
+              </div>
+
+              {/* Font Size Controls */}
+              <div className="border-t pt-4">
+                <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+                  <Type className="h-4 w-4 text-emerald-600" />
+                  أحجام الخطوط
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط العنوان الرئيسي ({localSettings.titleFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={16} max={40} value={localSettings.titleFontSize} onChange={(e) => updateSetting('titleFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={16} max={40} value={localSettings.titleFontSize} onChange={(e) => updateSetting('titleFontSize', parseInt(e.target.value) || 26)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط العنوان الفرعي ({localSettings.headerFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={12} max={30} value={localSettings.headerFontSize} onChange={(e) => updateSetting('headerFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={12} max={30} value={localSettings.headerFontSize} onChange={(e) => updateSetting('headerFontSize', parseInt(e.target.value) || 20)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط المحتوى ({localSettings.bodyFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={10} max={22} value={localSettings.bodyFontSize} onChange={(e) => updateSetting('bodyFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={10} max={22} value={localSettings.bodyFontSize} onChange={(e) => updateSetting('bodyFontSize', parseInt(e.target.value) || 14)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط الجدول ({localSettings.tableFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={10} max={20} value={localSettings.tableFontSize} onChange={(e) => updateSetting('tableFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={10} max={20} value={localSettings.tableFontSize} onChange={(e) => updateSetting('tableFontSize', parseInt(e.target.value) || 13)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط عنوان المتدرب ({localSettings.traineeInfoFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={12} max={24} value={localSettings.traineeInfoFontSize} onChange={(e) => updateSetting('traineeInfoFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={12} max={24} value={localSettings.traineeInfoFontSize} onChange={(e) => updateSetting('traineeInfoFontSize', parseInt(e.target.value) || 17)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم خط عنوان اليوم ({localSettings.dayHeaderFontSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={12} max={24} value={localSettings.dayHeaderFontSize} onChange={(e) => updateSetting('dayHeaderFontSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={12} max={24} value={localSettings.dayHeaderFontSize} onChange={(e) => updateSetting('dayHeaderFontSize', parseInt(e.target.value) || 15)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Size Controls */}
+              <div className="border-t pt-4">
+                <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+                  <Layout className="h-4 w-4 text-emerald-600" />
+                  أحجام العناصر
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">حجم الشعار ({localSettings.logoSize}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={30} max={120} value={localSettings.logoSize} onChange={(e) => updateSetting('logoSize', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={30} max={120} value={localSettings.logoSize} onChange={(e) => updateSetting('logoSize', parseInt(e.target.value) || 65)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حشو خلايا الجدول ({localSettings.tableCellPadding}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={4} max={20} value={localSettings.tableCellPadding} onChange={(e) => updateSetting('tableCellPadding', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={4} max={20} value={localSettings.tableCellPadding} onChange={(e) => updateSetting('tableCellPadding', parseInt(e.target.value) || 10)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">حشو الصفحة ({localSettings.pagePadding}px)</Label>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={10} max={60} value={localSettings.pagePadding} onChange={(e) => updateSetting('pagePadding', parseInt(e.target.value))} className="flex-1" />
+                      <Input type="number" min={10} max={60} value={localSettings.pagePadding} onChange={(e) => updateSetting('pagePadding', parseInt(e.target.value) || 40)} className="w-16 h-8 text-center" />
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

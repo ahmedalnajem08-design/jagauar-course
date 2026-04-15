@@ -20,6 +20,16 @@ export interface PrintSettings {
   tableHeaderBg: string
   fontFamily: string
   pageSize: string
+  // New customization options
+  titleFontSize: number
+  bodyFontSize: number
+  tableFontSize: number
+  tableCellPadding: number
+  pagePadding: number
+  logoSize: number
+  headerFontSize: number
+  traineeInfoFontSize: number
+  dayHeaderFontSize: number
 }
 
 export const defaultPrintSettings: PrintSettings = {
@@ -40,6 +50,16 @@ export const defaultPrintSettings: PrintSettings = {
   tableHeaderBg: '#f0fdf4',
   fontFamily: 'Arial',
   pageSize: 'A4',
+  // New customization defaults
+  titleFontSize: 26,
+  bodyFontSize: 14,
+  tableFontSize: 13,
+  tableCellPadding: 10,
+  pagePadding: 40,
+  logoSize: 65,
+  headerFontSize: 20,
+  traineeInfoFontSize: 17,
+  dayHeaderFontSize: 15,
 }
 
 function getLocalPrintSettings(): PrintSettings {

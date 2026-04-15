@@ -165,13 +165,19 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
       toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
       return
     }
+
+    const traineePhone = selectedCourse?.trainee.phone
+    if (!traineePhone) {
+      toast({ title: 'خطأ', description: 'لا يوجد رقم هاتف للمتدرب. أضف رقم الهاتف أولاً.', variant: 'destructive' })
+      return
+    }
+
     try {
       // Temporarily move element on-screen for proper rendering
       const originalStyle = el.parentElement?.style
       if (originalStyle) {
         originalStyle.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 0; pointer-events: none;'
       }
-      // Wait for render
       await new Promise(resolve => setTimeout(resolve, 300))
 
       const canvas = await html2canvas(el, {
@@ -194,6 +200,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
           return
         }
+        // Download the image
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
@@ -203,18 +210,27 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
 
+        // Format phone number for WhatsApp (remove leading 0, add Iraq country code 964)
+        let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
+        if (formattedPhone.startsWith('0')) {
+          formattedPhone = '964' + formattedPhone.substring(1)
+        } else if (!formattedPhone.startsWith('964') && !formattedPhone.startsWith('+')) {
+          formattedPhone = '964' + formattedPhone
+        }
+        // Remove any remaining +
+        formattedPhone = formattedPhone.replace('+', '')
+
         const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
           (selectedCourse?.days.map((day) =>
             `اليوم ${day.dayNumber}:\n` +
             day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
           ).join('\n\n') || '')
 
-        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`
         window.open(whatsappUrl, '_blank')
-        toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. قم بإرفاق الصورة المحملة.' })
+        toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب على رقم المتدرب. قم بإرفاق الصورة المحملة.' })
       }, 'image/jpeg', 0.95)
     } catch (err) {
-      // Restore off-screen position on error
       const parent = shareRef.current?.parentElement
       if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
       console.error('Share error:', err)
@@ -419,21 +435,30 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             <DialogHeader>
               <DialogTitle>مشاركة الكورس</DialogTitle>
             </DialogHeader>
-            <div className="py-4">
-              <p className="text-sm text-muted-foreground mb-4">سيتم استخدام إعدادات الطباعة الحالية لإنشاء الصورة. يمكنك تعديلها من صفحة الإعدادات.</p>
+            <div className="py-4 space-y-4">
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm">
-                <Settings className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">الصالة: {printSettings.gymName}</span>
+                <Phone className="h-4 w-4 text-emerald-600" />
+                <span>رقم المتدرب: <strong dir="ltr">{selectedCourse.trainee.phone || 'غير محدد'}</strong></span>
               </div>
+              {!selectedCourse.trainee.phone && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-700 dark:text-amber-300">
+                  لا يوجد رقم هاتف للمتدرب. أضف رقم الهاتف من صفحة المتدربين لتفعيل المشاركة عبر واتساب.
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">سيتم تحميل صورة الكورس ثم فتح واتساب على رقم المتدرب. قم بإرفاق الصورة المحملة يدوياً.</p>
             </div>
             <DialogFooter className="gap-2 flex-col">
-              <Button onClick={shareViaWhatsApp} className="w-full bg-green-600 hover:bg-green-700 gap-2">
+              <Button onClick={shareViaWhatsApp} disabled={!selectedCourse.trainee.phone} className="w-full bg-green-600 hover:bg-green-700 gap-2">
                 <Share2 className="h-4 w-4" />
-                مشاركة عبر واتساب
+                إرسال عبر واتساب
               </Button>
               <Button onClick={captureAndDownload} variant="outline" className="w-full gap-2">
                 <Download className="h-4 w-4" />
                 تحميل كصورة JPG
+              </Button>
+              <Button onClick={() => { setShareDialogOpen(false); setShowPrintPreview(true) }} variant="outline" className="w-full gap-2">
+                <Printer className="h-4 w-4" />
+                طباعة / حفظ كـ PDF
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -537,16 +562,16 @@ function CoursePrintContent({ course, settings }: {
   settings: PrintSettings
 }) {
   const accentColor = settings.accentColor
-  // Create a lighter version of accent color for backgrounds
   const accentBg = `${accentColor}10`
   const accentBorder = `${accentColor}30`
   const accentMid = `${accentColor}50`
+  const pad = `${settings.tableCellPadding}px ${settings.tableCellPadding + 4}px`
 
   return (
     <div style={{
       width: settings.pageSize === 'A5' ? '559px' : settings.pageSize === 'Letter' ? '816px' : '794px',
       minHeight: settings.pageSize === 'A5' ? '794px' : '1123px',
-      padding: '40px',
+      padding: `${settings.pagePadding}px`,
       fontFamily: `${settings.fontFamily}, Tahoma, sans-serif`,
       direction: 'rtl',
       background: '#ffffff',
@@ -583,17 +608,17 @@ function CoursePrintContent({ course, settings }: {
             <img
               src={settings.gymLogo}
               alt="شعار"
-              style={{ width: '65px', height: '65px', objectFit: 'contain', borderRadius: '8px' }}
+              style={{ width: `${settings.logoSize}px`, height: `${settings.logoSize}px`, objectFit: 'contain', borderRadius: '8px' }}
             />
           )}
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: 'bold', color: accentColor, margin: 0, lineHeight: 1.2 }}>{settings.gymName}</h1>
-            {settings.gymPhone && <p style={{ fontSize: '14px', color: '#555', margin: '6px 0 0 0' }}>هاتف: {settings.gymPhone}</p>}
+            <h1 style={{ fontSize: `${settings.titleFontSize}px`, fontWeight: 'bold', color: accentColor, margin: 0, lineHeight: 1.2 }}>{settings.gymName}</h1>
+            {settings.gymPhone && <p style={{ fontSize: `${settings.bodyFontSize - 1}px`, color: '#555', margin: '6px 0 0 0' }}>هاتف: {settings.gymPhone}</p>}
           </div>
         </div>
         <div style={{ textAlign: 'left' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, color: '#1a1a1a' }}>برنامج تدريبي</h2>
-          <p style={{ fontSize: '13px', color: '#555', margin: '6px 0 0 0' }}>{new Date().toLocaleDateString('ar-IQ')}</p>
+          <h2 style={{ fontSize: `${settings.headerFontSize}px`, fontWeight: 'bold', margin: 0, color: '#1a1a1a' }}>برنامج تدريبي</h2>
+          <p style={{ fontSize: `${settings.bodyFontSize - 1}px`, color: '#555', margin: '6px 0 0 0' }}>{new Date().toLocaleDateString('ar-IQ')}</p>
         </div>
       </div>
 
@@ -613,12 +638,12 @@ function CoursePrintContent({ course, settings }: {
             م
           </div>
           <div>
-            <span style={{ fontSize: '11px', color: '#999', display: 'block' }}>المدرب المسؤول</span>
-            <p style={{ fontWeight: 'bold', margin: '2px 0 0 0', fontSize: '14px', color: '#1a1a1a' }}>{course.trainer.name}</p>
+            <span style={{ fontSize: `${settings.bodyFontSize - 3}px`, color: '#999', display: 'block' }}>المدرب المسؤول</span>
+            <p style={{ fontWeight: 'bold', margin: '2px 0 0 0', fontSize: `${settings.bodyFontSize}px`, color: '#1a1a1a' }}>{course.trainer.name}</p>
           </div>
         </div>
         {course.trainer.phone && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#555' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: `${settings.bodyFontSize - 1}px`, color: '#555' }}>
             <span>هاتف المدرب:</span>
             <span style={{ fontWeight: '600', direction: 'ltr' }}>{course.trainer.phone}</span>
           </div>
@@ -634,7 +659,7 @@ function CoursePrintContent({ course, settings }: {
           marginBottom: '25px',
           border: `1px solid ${accentBorder}`,
         }}>
-          <h3 style={{ fontSize: '17px', fontWeight: 'bold', color: accentColor, marginBottom: '12px', marginTop: 0 }}>
+          <h3 style={{ fontSize: `${settings.traineeInfoFontSize}px`, fontWeight: 'bold', color: accentColor, marginBottom: '12px', marginTop: 0 }}>
             معلومات المتدرب
           </h3>
           <div style={{
@@ -643,41 +668,41 @@ function CoursePrintContent({ course, settings }: {
             gap: '12px',
           }}>
             <div>
-              <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الاسم</span>
-              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.name}</p>
+              <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الاسم</span>
+              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.name}</p>
             </div>
             <div>
-              <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الجنس</span>
-              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.gender === 'female' ? 'أنثى' : 'ذكر'}</p>
+              <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الجنس</span>
+              <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.gender === 'female' ? 'أنثى' : 'ذكر'}</p>
             </div>
             {settings.showPhone && (
               <div>
-                <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الهاتف</span>
-                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.phone || '-'}</p>
+                <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الهاتف</span>
+                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.phone || '-'}</p>
               </div>
             )}
             {settings.showWeight && (
               <div>
-                <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الوزن</span>
-                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.weight} كغ</p>
+                <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الوزن</span>
+                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.weight} كغ</p>
               </div>
             )}
             {settings.showHeight && (
               <div>
-                <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الطول</span>
-                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.height} سم</p>
+                <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الطول</span>
+                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.height} سم</p>
               </div>
             )}
             {settings.showAge && (
               <div>
-                <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>العمر</span>
-                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{course.trainee.age} سنة</p>
+                <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>العمر</span>
+                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{course.trainee.age} سنة</p>
               </div>
             )}
             {settings.showSubscriptionDate && (
               <div>
-                <span style={{ fontSize: '12px', color: '#777', display: 'block' }}>الاشتراك</span>
-                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: '14px' }}>{new Date(course.trainee.subscriptionDate).toLocaleDateString('ar-IQ')}</p>
+                <span style={{ fontSize: `${settings.bodyFontSize - 2}px`, color: '#777', display: 'block' }}>الاشتراك</span>
+                <p style={{ fontWeight: 'bold', margin: '3px 0 0 0', fontSize: `${settings.bodyFontSize}px` }}>{new Date(course.trainee.subscriptionDate).toLocaleDateString('ar-IQ')}</p>
               </div>
             )}
           </div>
@@ -690,35 +715,35 @@ function CoursePrintContent({ course, settings }: {
           <div style={{
             background: settings.dayHeaderColor,
             color: '#ffffff',
-            padding: '10px 18px',
+            padding: `${settings.tableCellPadding}px 18px`,
             borderRadius: '8px 8px 0 0',
             fontWeight: 'bold',
-            fontSize: '15px',
+            fontSize: `${settings.dayHeaderFontSize}px`,
           }}>
             اليوم {day.dayNumber}
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${settings.tableFontSize}px` }}>
             <thead>
               <tr style={{ background: settings.tableHeaderBg }}>
-                <th style={{ padding: '10px 14px', textAlign: 'right', borderBottom: `2px solid ${accentMid}`, width: '40px', fontWeight: '600' }}>#</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', borderBottom: `2px solid ${accentMid}`, fontWeight: '600' }}>التمرين</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', borderBottom: `2px solid ${accentMid}`, fontWeight: '600' }}>المجموعة</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', borderBottom: `2px solid ${accentMid}`, width: '90px', fontWeight: '600' }}>المجموعات</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', borderBottom: `2px solid ${accentMid}`, width: '90px', fontWeight: '600' }}>التكرارات</th>
+                <th style={{ padding: pad, textAlign: 'right', borderBottom: `2px solid ${accentMid}`, width: '40px', fontWeight: '600' }}>#</th>
+                <th style={{ padding: pad, textAlign: 'right', borderBottom: `2px solid ${accentMid}`, fontWeight: '600' }}>التمرين</th>
+                <th style={{ padding: pad, textAlign: 'center', borderBottom: `2px solid ${accentMid}`, fontWeight: '600' }}>المجموعة</th>
+                <th style={{ padding: pad, textAlign: 'center', borderBottom: `2px solid ${accentMid}`, width: '90px', fontWeight: '600' }}>المجموعات</th>
+                <th style={{ padding: pad, textAlign: 'center', borderBottom: `2px solid ${accentMid}`, width: '90px', fontWeight: '600' }}>التكرارات</th>
               </tr>
             </thead>
             <tbody>
               {day.exercises.map((ex, i) => (
                 <tr key={ex.id} style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: '10px 14px' }}>{i + 1}</td>
-                  <td style={{ padding: '10px 14px', fontWeight: '600' }}>{ex.exercise.name}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
+                  <td style={{ padding: pad }}>{i + 1}</td>
+                  <td style={{ padding: pad, fontWeight: '600' }}>{ex.exercise.name}</td>
+                  <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
                   {ex.freeText ? (
-                    <td colSpan={2} style={{ padding: '10px 14px', textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
+                    <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
                   ) : (
                     <>
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
+                      <td style={{ padding: pad, textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
+                      <td style={{ padding: pad, textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
                     </>
                   )}
                 </tr>
@@ -734,7 +759,7 @@ function CoursePrintContent({ course, settings }: {
         paddingTop: '15px',
         borderTop: '2px solid #e5e5e5',
         textAlign: 'center',
-        fontSize: '12px',
+        fontSize: `${settings.tableFontSize - 1}px`,
         color: '#999',
       }}>
         <p style={{ margin: 0 }}>
