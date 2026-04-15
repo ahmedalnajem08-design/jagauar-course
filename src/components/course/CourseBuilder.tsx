@@ -183,6 +183,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
               exerciseId: e.exerciseId,
               customSets: e.customSets,
               customReps: e.customReps,
+              freeText: e.freeText && e.freeText.trim() ? e.freeText.trim() : null,
             })),
           })),
         }),
@@ -424,29 +425,93 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                                     <X className="h-4 w-4" />
                                   </Button>
                                 </div>
-                                {/* Free text input for sets/reps */}
-                                <div className="flex items-center gap-2">
-                                  <Label className="text-xs whitespace-nowrap">المجموعات والتكرارات:</Label>
-                                  <Input
-                                    placeholder={`${ex.customSets} مجموعات × ${ex.customReps} تكرارات`}
-                                    value={ex.freeText || ''}
-                                    onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)}
-                                    className="h-8 text-sm flex-1"
-                                    dir="rtl"
-                                  />
-                                  {ex.freeText && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 text-xs text-muted-foreground"
-                                      onClick={() => updateFreeText(day.dayNumber, ex.exerciseId, '')}
-                                    >
-                                      إعادة
-                                    </Button>
-                                  )}
+
+                                {/* Toggle: ثابت / حر */}
+                                <div className="flex gap-1 mb-2 bg-muted rounded-lg p-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateFreeText(day.dayNumber, ex.exerciseId, '')
+                                    }}
+                                    className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${!ex.freeText ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                  >
+                                    ثابت (أرقام)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!ex.freeText) updateFreeText(day.dayNumber, ex.exerciseId, ' ')
+                                    }}
+                                    className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${ex.freeText ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                  >
+                                    حر (نص)
+                                  </button>
                                 </div>
+
+                                {/* Fixed Mode: Number inputs */}
+                                {!ex.freeText && (
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <Label className="text-xs whitespace-nowrap">مجموعات</Label>
+                                      <div className="flex items-center border rounded-lg overflow-hidden">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, ex.customSets - 1))}
+                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
+                                        >−</button>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          value={ex.customSets}
+                                          onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, parseInt(e.target.value) || 1))}
+                                          className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', ex.customSets + 1)}
+                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
+                                        >+</button>
+                                      </div>
+                                    </div>
+                                    <span className="text-muted-foreground text-lg">×</span>
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <Label className="text-xs whitespace-nowrap">تكرارات</Label>
+                                      <div className="flex items-center border rounded-lg overflow-hidden">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, ex.customReps - 1))}
+                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
+                                        >−</button>
+                                        <Input
+                                          type="number"
+                                          min={1}
+                                          value={ex.customReps}
+                                          onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, parseInt(e.target.value) || 1))}
+                                          className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', ex.customReps + 1)}
+                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
+                                        >+</button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Free Text Mode: Text input */}
                                 {ex.freeText && (
-                                  <p className="text-xs text-emerald-600 mt-1">✓ سيتم استخدام النص المكتوب بدل القيم الثابتة</p>
+                                  <div className="space-y-1">
+                                    <Input
+                                      placeholder="اكتب هنا... مثال: 30 ثانية أو 3×12"
+                                      value={ex.freeText === ' ' ? '' : ex.freeText}
+                                      onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)}
+                                      className="h-9 text-sm"
+                                      dir="rtl"
+                                      autoFocus
+                                    />
+                                    <p className="text-xs text-amber-600">✓ سيتم عرض النص المكتوب بدل المجموعات والتكرارات</p>
+                                  </div>
                                 )}
                               </div>
                             ))}
