@@ -18,6 +18,7 @@ interface CourseDayExercise {
   exerciseId: string
   customSets: number | null
   customReps: number | null
+  freeText?: string | null
   order: number
   exercise: {
     id: string
@@ -205,7 +206,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
           (selectedCourse?.days.map((day) =>
             `اليوم ${day.dayNumber}:\n` +
-            day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`).join('\n')
+            day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
           ).join('\n\n') || '')
 
         const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
@@ -387,8 +388,12 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                               <td className="py-3 px-4 text-center">
                                 <Badge variant="outline" className="text-xs">{ex.exercise.group?.name || '-'}</Badge>
                               </td>
-                              <td className="py-3 px-4 text-center">{ex.customSets || ex.exercise.sets}</td>
-                              <td className="py-3 px-4 text-center">{ex.customReps || ex.exercise.reps}</td>
+                              <td className="py-3 px-4 text-center">
+                                {ex.freeText ? <span className="text-emerald-600 font-medium">{ex.freeText}</span> : (ex.customSets || ex.exercise.sets)}
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                {ex.freeText ? <span className="text-emerald-600 font-medium">-</span> : (ex.customReps || ex.exercise.reps)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -708,8 +713,14 @@ function CoursePrintContent({ course, settings }: {
                   <td style={{ padding: '10px 14px' }}>{i + 1}</td>
                   <td style={{ padding: '10px 14px', fontWeight: '600' }}>{ex.exercise.name}</td>
                   <td style={{ padding: '10px 14px', textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
+                  {ex.freeText ? (
+                    <td colSpan={2} style={{ padding: '10px 14px', textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
+                  ) : (
+                    <>
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

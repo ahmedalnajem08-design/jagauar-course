@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X } from 'lucide-react'
+import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X, Search } from 'lucide-react'
 
 interface Trainee {
   id: string
@@ -41,6 +41,7 @@ interface DayExercise {
   exercise?: Exercise
   customSets: number
   customReps: number
+  freeText?: string  // Free text for sets/reps like "3×12" or "30 ثانية"
 }
 
 interface DayData {
@@ -60,6 +61,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const [activeDay, setActiveDay] = useState(1)
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all')
   const [saving, setSaving] = useState(false)
+  const [traineeSearch, setTraineeSearch] = useState('')
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -141,6 +143,20 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     )
   }
 
+  const updateFreeText = (dayNumber: number, exerciseId: string, freeText: string) => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.dayNumber !== dayNumber) return d
+        return {
+          ...d,
+          exercises: d.exercises.map((e) =>
+            e.exerciseId === exerciseId ? { ...e, freeText } : e
+          ),
+        }
+      })
+    )
+  }
+
   const handleSave = async () => {
     if (!selectedTrainee) {
       toast({ title: 'خطأ', description: 'يرجى اختيار المتدرب', variant: 'destructive' })
@@ -189,6 +205,13 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
 
   const selectedTraineeData = trainees.find((t) => t.id === selectedTrainee)
 
+  // Filter trainees by search (name or phone)
+  const filteredTrainees = trainees.filter((t) => {
+    if (!traineeSearch.trim()) return true
+    const q = traineeSearch.trim().toLowerCase()
+    return t.name.toLowerCase().includes(q) || (t as any).phone?.toLowerCase().includes(q)
+  })
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -236,8 +259,35 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                 <p>لا يوجد متدربين. يرجى إضافة متدرب أولاً.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {trainees.map((t) => (
+              <>
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="بحث بالاسم أو رقم الهاتف..."
+                    value={traineeSearch}
+                    onChange={(e) => setTraineeSearch(e.target.value)}
+                    className="pr-10"
+                  />
+                  {traineeSearch && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                      onClick={() => setTraineeSearch('')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+
+                {filteredTrainees.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <p>لا توجد نتائج مطابقة للبحث</p>
+                  </div>
+                ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredTrainees.map((t) => (
                   <div
                     key={t.id}
                     onClick={() => setSelectedTrainee(t.id)}
@@ -254,7 +304,9 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+                )}
+              </>
             )}
             <div className="flex justify-end">
               <Button onClick={() => setStep(2)} disabled={!selectedTrainee} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
@@ -358,40 +410,44 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {day.exercises.map((ex) => (
-                              <div key={ex.exerciseId} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                                <div className="flex items-center gap-3">
-                                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                                  <span className="font-medium">{ex.exercise?.name || 'تمرين'}</span>
-                                  {ex.exercise?.group && (
-                                    <Badge variant="outline" className="text-xs">{ex.exercise.group.name}</Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Label className="text-xs">مجموعات</Label>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      value={ex.customSets}
-                                      onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', parseInt(e.target.value) || 1)}
-                                      className="w-16 h-8 text-center"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Label className="text-xs">تكرارات</Label>
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      value={ex.customReps}
-                                      onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', parseInt(e.target.value) || 1)}
-                                      className="w-16 h-8 text-center"
-                                    />
+                            {day.exercises.map((ex, index) => (
+                              <div key={ex.exerciseId} className="p-3 rounded-lg border bg-card">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-3">
+                                    <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 text-xs font-bold flex items-center justify-center">{index + 1}</span>
+                                    <span className="font-medium">{ex.exercise?.name || 'تمرين'}</span>
+                                    {ex.exercise?.group && (
+                                      <Badge variant="outline" className="text-xs">{ex.exercise.group.name}</Badge>
+                                    )}
                                   </div>
                                   <Button variant="ghost" size="icon" onClick={() => removeExerciseFromDay(day.dayNumber, ex.exerciseId)} className="h-8 w-8 text-red-500">
                                     <X className="h-4 w-4" />
                                   </Button>
                                 </div>
+                                {/* Free text input for sets/reps */}
+                                <div className="flex items-center gap-2">
+                                  <Label className="text-xs whitespace-nowrap">المجموعات والتكرارات:</Label>
+                                  <Input
+                                    placeholder={`${ex.customSets} مجموعات × ${ex.customReps} تكرارات`}
+                                    value={ex.freeText || ''}
+                                    onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)}
+                                    className="h-8 text-sm flex-1"
+                                    dir="rtl"
+                                  />
+                                  {ex.freeText && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 text-xs text-muted-foreground"
+                                      onClick={() => updateFreeText(day.dayNumber, ex.exerciseId, '')}
+                                    >
+                                      إعادة
+                                    </Button>
+                                  )}
+                                </div>
+                                {ex.freeText && (
+                                  <p className="text-xs text-emerald-600 mt-1">✓ سيتم استخدام النص المكتوب بدل القيم الثابتة</p>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -501,7 +557,9 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                   {day.exercises.map((ex, i) => (
                     <div key={ex.exerciseId} className="flex items-center justify-between py-1.5 text-sm">
                       <span>{i + 1}. {ex.exercise?.name}</span>
-                      <span className="text-muted-foreground">{ex.customSets} مجموعات × {ex.customReps} تكرارات</span>
+                      <span className="text-muted-foreground">
+                        {ex.freeText || `${ex.customSets} مجموعات × ${ex.customReps} تكرارات`}
+                      </span>
                     </div>
                   ))}
                 </div>

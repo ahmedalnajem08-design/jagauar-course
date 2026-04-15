@@ -92,6 +92,7 @@ model CourseDayExercise {
   exercise     Exercise   @relation(fields: [exerciseId], references: [id])
   customSets   Int?
   customReps   Int?
+  freeText     String?    // Free text for sets/reps like "3×12" or "30 ثانية"
   order        Int        @default(0)
 }
 

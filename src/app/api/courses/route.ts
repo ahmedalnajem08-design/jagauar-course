@@ -62,13 +62,14 @@ export async function POST(request: NextRequest) {
         trainerId,
         numberOfDays,
         days: {
-          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number }[] }) => ({
+          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
-              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number }, index: number) => ({
+              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
                 customSets: ex.customSets,
                 customReps: ex.customReps,
+                freeText: ex.freeText || null,
                 order: index,
               })),
             },
@@ -108,13 +109,14 @@ export async function PUT(request: NextRequest) {
         traineeId,
         numberOfDays,
         days: {
-          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number }[] }) => ({
+          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
-              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number }, index: number) => ({
+              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
                 customSets: ex.customSets,
                 customReps: ex.customReps,
+                freeText: ex.freeText || null,
                 order: index,
               })),
             },
