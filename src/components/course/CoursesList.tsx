@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { defaultPrintSettings, type PrintSettings, usePrintSettings } from '@/hooks/use-settings'
-import { ClipboardList, Trash2, Printer, Share2, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Download, Phone, Settings, VenusAndMars, Image, FileText, MessageCircle } from 'lucide-react'
+import { type PrintSettings, usePrintSettings } from '@/hooks/use-settings'
+import { ClipboardList, Trash2, Printer, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Phone, VenusAndMars, MessageCircle, FileText } from 'lucide-react'
 import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 interface CourseDayExercise {
   id: string
@@ -62,8 +63,6 @@ interface Course {
   days: CourseDay[]
 }
 
-type CaptureAction = 'image' | 'whatsapp' | null
-
 export default function CoursesList({ refreshTrigger }: { refreshTrigger?: number }) {
   const { user } = useAuth()
   const [courses, setCourses] = useState<Course[]>([])
@@ -74,10 +73,8 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [activeDay, setActiveDay] = useState('1')
   const [showPrintPreview, setShowPrintPreview] = useState(false)
-  const [isCapturing, setIsCapturing] = useState(false)
-  const [captureAction, setCaptureAction] = useState<CaptureAction>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
   const { settings: printSettings, reloadSettings } = usePrintSettings()
-  const captureDoneRef = useRef(false)
   const { toast } = useToast()
 
   const fetchCourses = useCallback(async () => {
@@ -95,93 +92,129 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
 
   useEffect(() => { fetchCourses(); reloadSettings() }, [fetchCourses, refreshTrigger, reloadSettings])
 
-  // Auto-capture when entering capture mode (print preview is shown with content on-screen)
-  useEffect(() => {
-    if (!captureAction || !showPrintPreview || !selectedCourse || isCapturing) return
-    if (captureDoneRef.current) return
-    captureDoneRef.current = true
+  // Generate PDF from the print-area element and open WhatsApp
+  const generatePDFAndShareWhatsApp = async () => {
+    if (!selectedCourse) return
 
-    const performCapture = async () => {
-      setIsCapturing(true)
-      // Wait for the content to render on-screen
-      await new Promise(r => setTimeout(r, 800))
+    setIsGenerating(true)
+    reloadSettings()
+    setShowPrintPreview(true)
 
+    // Wait for the content to render on-screen
+    await new Promise(r => setTimeout(r, 1200))
+
+    try {
       const el = document.getElementById('print-area')
       if (!el) {
         toast({ title: 'خطأ', description: 'فشل في العثور على محتوى الكورس', variant: 'destructive' })
-        cleanup()
+        setIsGenerating(false)
+        setShowPrintPreview(false)
         return
       }
 
-      try {
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false,
-          allowTaint: true,
-          width: el.scrollWidth,
-          height: el.scrollHeight,
-        })
+      // Capture the rendered content with html2canvas
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+      })
 
-        if (captureAction === 'image') {
-          // Download as JPG
-          const link = document.createElement('a')
-          link.download = `كورس_${selectedCourse.trainee.name || 'متدرب'}.jpg`
-          link.href = canvas.toDataURL('image/jpeg', 0.95)
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
-          toast({ title: 'تم التحميل', description: 'تم تحميل صورة الكورس بنجاح' })
-        } else if (captureAction === 'whatsapp') {
-          // Download image first
-          const link = document.createElement('a')
-          link.download = `كورس_${selectedCourse.trainee.name || 'متدرب'}.jpg`
-          link.href = canvas.toDataURL('image/jpeg', 0.95)
-          document.body.appendChild(link)
-          link.click()
-          document.body.removeChild(link)
+      // Create PDF from canvas
+      const imgData = canvas.toDataURL('image/jpeg', 0.95)
+      const imgWidth = el.scrollWidth
+      const imgHeight = el.scrollHeight
 
-          // Format phone and open WhatsApp
-          const traineePhone = selectedCourse.trainee.phone
-          if (traineePhone) {
-            let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
-            if (formattedPhone.startsWith('0')) {
-              formattedPhone = '964' + formattedPhone.substring(1)
-            } else if (!formattedPhone.startsWith('964')) {
-              formattedPhone = '964' + formattedPhone
-            }
+      // Determine page size based on settings
+      const pageWidth = printSettings.pageSize === 'A5' ? 148 : printSettings.pageSize === 'Letter' ? 216 : 210 // mm
+      const pageHeight = printSettings.pageSize === 'A5' ? 210 : printSettings.pageSize === 'Letter' ? 279 : 297 // mm
 
-            const text = `تمرين ${selectedCourse.trainee.name} - ${selectedCourse.numberOfDays} أيام\nالمدرب: ${selectedCourse.trainer.name}\n\n` +
-              (selectedCourse.days.map((day) =>
-                `اليوم ${day.dayNumber}:\n` +
-                day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
-              ).join('\n\n') || '')
+      const pdf = new jsPDF({
+        orientation: pageHeight > pageWidth ? 'portrait' : 'landscape',
+        unit: 'mm',
+        format: printSettings.pageSize === 'A5' ? 'a5' : printSettings.pageSize === 'Letter' ? 'letter' : 'a4',
+      })
 
-            window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`, '_blank')
-            toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. أرفق الصورة من جهازك وأرسلها.', duration: 8000 })
-          } else {
-            toast({ title: 'تنبيه', description: 'لا يوجد رقم هاتف للمتدرب. تم تحميل الصورة فقط.', duration: 5000 })
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const margin = printSettings.pagePadding ? printSettings.pagePadding * 0.264583 : 10 // px to mm
+      const contentWidth = pdfWidth - 2 * margin
+      const scaleFactor = contentWidth / imgWidth
+      const contentHeight = imgHeight * scaleFactor
+
+      // If content fits on one page
+      if (contentHeight <= pdfHeight - 2 * margin) {
+        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, contentHeight)
+      } else {
+        // Multi-page: split the image across pages
+        const availableHeight = pdfHeight - 2 * margin
+        const srcPageHeight = availableHeight / scaleFactor
+        let currentY = 0
+        let pageNum = 0
+
+        while (currentY < imgHeight) {
+          if (pageNum > 0) pdf.addPage()
+
+          // Create a temporary canvas for this page slice
+          const pageCanvas = document.createElement('canvas')
+          pageCanvas.width = imgWidth
+          const sliceHeight = Math.min(srcPageHeight, imgHeight - currentY)
+          pageCanvas.height = sliceHeight
+
+          const ctx = pageCanvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(
+              canvas,
+              0, currentY, imgWidth, sliceHeight,
+              0, 0, imgWidth, sliceHeight
+            )
           }
+
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.95)
+          const slicePdfHeight = sliceHeight * scaleFactor
+          pdf.addImage(pageImgData, 'JPEG', margin, margin, contentWidth, slicePdfHeight)
+
+          currentY += srcPageHeight
+          pageNum++
         }
-      } catch (err) {
-        console.error('Capture error:', err)
-        toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
       }
 
-      cleanup()
+      // Save the PDF
+      const fileName = `كورس_${selectedCourse.trainee.name || 'متدرب'}.pdf`
+      pdf.save(fileName)
+
+      // Format phone and open WhatsApp
+      const traineePhone = selectedCourse.trainee.phone
+      if (traineePhone) {
+        let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
+        if (formattedPhone.startsWith('0')) {
+          formattedPhone = '964' + formattedPhone.substring(1)
+        } else if (!formattedPhone.startsWith('964')) {
+          formattedPhone = '964' + formattedPhone
+        }
+
+        const text = `تمرين ${selectedCourse.trainee.name} - ${selectedCourse.numberOfDays} أيام\nالمدرب: ${selectedCourse.trainer.name}\n\n` +
+          (selectedCourse.days.map((day) =>
+            `اليوم ${day.dayNumber}:\n` +
+            day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
+          ).join('\n\n') || '')
+
+        window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`, '_blank')
+        toast({ title: 'تم فتح واتساب', description: 'تم تحميل ملف PDF وفتح واتساب. أرفق الملف من جهازك وأرسله.', duration: 8000 })
+      } else {
+        toast({ title: 'تم تحميل PDF', description: 'لا يوجد رقم هاتف للمتدرب. تم تحميل الملف فقط.', duration: 5000 })
+      }
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      toast({ title: 'خطأ', description: 'فشل في إنشاء ملف PDF', variant: 'destructive' })
     }
 
-    const cleanup = () => {
-      setCaptureAction(null)
-      captureDoneRef.current = false
-      setIsCapturing(false)
-      // Go back from print preview after a short delay
-      setTimeout(() => setShowPrintPreview(false), 500)
-    }
-
-    performCapture()
-  }, [captureAction, showPrintPreview, selectedCourse, isCapturing, toast])
+    setIsGenerating(false)
+    setTimeout(() => setShowPrintPreview(false), 500)
+  }
 
   const handleDelete = async () => {
     if (!deletingId) return
@@ -203,24 +236,6 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
 
   const closePrintPreview = () => {
     setShowPrintPreview(false)
-    setCaptureAction(null)
-    captureDoneRef.current = false
-  }
-
-  // Start image capture - enters print preview then auto-captures
-  const startImageCapture = () => {
-    captureDoneRef.current = false
-    setCaptureAction('image')
-    reloadSettings()
-    setShowPrintPreview(true)
-  }
-
-  // Start WhatsApp capture - enters print preview then auto-captures and opens WhatsApp
-  const startWhatsAppCapture = () => {
-    captureDoneRef.current = false
-    setCaptureAction('whatsapp')
-    reloadSettings()
-    setShowPrintPreview(true)
   }
 
   if (loading) {
@@ -231,7 +246,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
     )
   }
 
-  // Print Preview Mode OR Capture Mode
+  // Print Preview Mode
   if (showPrintPreview && selectedCourse) {
     return (
       <div className="space-y-4">
@@ -240,10 +255,10 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             <ArrowRight className="h-4 w-4" />
             رجوع
           </Button>
-          {isCapturing ? (
+          {isGenerating ? (
             <div className="flex items-center gap-2 text-emerald-600">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-600" />
-              <span className="text-sm font-medium">جارٍ تجهيز الصورة...</span>
+              <span className="text-sm font-medium">جارٍ تجهيز ملف PDF...</span>
             </div>
           ) : (
             <Button onClick={doPrint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
@@ -276,8 +291,8 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           </div>
         </div>
 
-        {/* Action Buttons - Prominent and clear */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Action Buttons */}
+        <div className="grid grid-cols-3 gap-3">
           <Button
             onClick={() => { reloadSettings(); setShowPrintPreview(true) }}
             variant="outline"
@@ -287,24 +302,11 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             <span className="text-sm font-semibold">طباعة / PDF</span>
           </Button>
           <Button
-            onClick={startImageCapture}
-            variant="outline"
-            disabled={isCapturing}
-            className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
-          >
-            {isCapturing ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-            ) : (
-              <Image className="h-6 w-6 text-blue-600" />
-            )}
-            <span className="text-sm font-semibold">حفظ كصورة</span>
-          </Button>
-          <Button
             onClick={() => { reloadSettings(); setShareDialogOpen(true) }}
             className="h-auto py-4 flex flex-col items-center gap-2 bg-green-600 hover:bg-green-700 transition-all"
           >
             <MessageCircle className="h-6 w-6" />
-            <span className="text-sm font-semibold">واتساب</span>
+            <span className="text-sm font-semibold">واتساب PDF</span>
           </Button>
           <Button
             onClick={() => {
@@ -454,7 +456,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-green-600" />
-                مشاركة الكورس عبر واتساب
+                إرسال PDF عبر واتساب
               </DialogTitle>
             </DialogHeader>
             <div className="py-4 space-y-4">
@@ -470,10 +472,10 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                 <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-700 dark:text-green-300">
                   <p className="font-semibold mb-1">كيفية الإرسال:</p>
                   <ol className="list-decimal list-inside space-y-1">
-                    <li>اضغط &quot;إرسال عبر واتساب&quot;</li>
-                    <li>سيتم تحميل صورة الكورس تلقائياً</li>
+                    <li>اضغط &quot;إرسال PDF عبر واتساب&quot;</li>
+                    <li>سيتم تحميل ملف PDF تلقائياً على جهازك</li>
                     <li>سيتم فتح واتساب على رقم المتدرب</li>
-                    <li>أرفق الصورة المحملة من جهازك وأرسلها</li>
+                    <li>أرفق ملف PDF من جهازك وأرسله</li>
                   </ol>
                 </div>
               )}
@@ -482,28 +484,18 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
               <Button
                 onClick={() => {
                   setShareDialogOpen(false)
-                  startWhatsAppCapture()
+                  generatePDFAndShareWhatsApp()
                 }}
-                disabled={!selectedCourse.trainee.phone || isCapturing}
+                disabled={!selectedCourse.trainee.phone || isGenerating}
                 className="w-full bg-green-600 hover:bg-green-700 gap-2 h-12 text-base"
               >
-                {isCapturing ? (
+                {isGenerating ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 ) : (
-                  <MessageCircle className="h-5 w-5" />
+                  <FileText className="h-5 w-5" />
                 )}
-                {isCapturing ? 'جارٍ التحضير...' : 'إرسال عبر واتساب'}
+                {isGenerating ? 'جارٍ تجهيز PDF...' : 'إرسال PDF عبر واتساب'}
               </Button>
-              <div className="grid grid-cols-2 gap-2 w-full">
-                <Button onClick={() => { setShareDialogOpen(false); startImageCapture() }} variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" />
-                  تحميل كصورة
-                </Button>
-                <Button onClick={() => { setShareDialogOpen(false); reloadSettings(); setShowPrintPreview(true) }} variant="outline" className="gap-2">
-                  <Printer className="h-4 w-4" />
-                  طباعة / PDF
-                </Button>
-              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
