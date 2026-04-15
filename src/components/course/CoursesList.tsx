@@ -62,6 +62,8 @@ interface Course {
   days: CourseDay[]
 }
 
+type CaptureAction = 'image' | 'whatsapp' | null
+
 export default function CoursesList({ refreshTrigger }: { refreshTrigger?: number }) {
   const { user } = useAuth()
   const [courses, setCourses] = useState<Course[]>([])
@@ -73,8 +75,9 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   const [activeDay, setActiveDay] = useState('1')
   const [showPrintPreview, setShowPrintPreview] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
+  const [captureAction, setCaptureAction] = useState<CaptureAction>(null)
   const { settings: printSettings, reloadSettings } = usePrintSettings()
-  const shareRef = useRef<HTMLDivElement>(null)
+  const captureDoneRef = useRef(false)
   const { toast } = useToast()
 
   const fetchCourses = useCallback(async () => {
@@ -91,6 +94,94 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
   }, [toast, user])
 
   useEffect(() => { fetchCourses(); reloadSettings() }, [fetchCourses, refreshTrigger, reloadSettings])
+
+  // Auto-capture when entering capture mode (print preview is shown with content on-screen)
+  useEffect(() => {
+    if (!captureAction || !showPrintPreview || !selectedCourse || isCapturing) return
+    if (captureDoneRef.current) return
+    captureDoneRef.current = true
+
+    const performCapture = async () => {
+      setIsCapturing(true)
+      // Wait for the content to render on-screen
+      await new Promise(r => setTimeout(r, 800))
+
+      const el = document.getElementById('print-area')
+      if (!el) {
+        toast({ title: 'خطأ', description: 'فشل في العثور على محتوى الكورس', variant: 'destructive' })
+        cleanup()
+        return
+      }
+
+      try {
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          allowTaint: true,
+          width: el.scrollWidth,
+          height: el.scrollHeight,
+        })
+
+        if (captureAction === 'image') {
+          // Download as JPG
+          const link = document.createElement('a')
+          link.download = `كورس_${selectedCourse.trainee.name || 'متدرب'}.jpg`
+          link.href = canvas.toDataURL('image/jpeg', 0.95)
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          toast({ title: 'تم التحميل', description: 'تم تحميل صورة الكورس بنجاح' })
+        } else if (captureAction === 'whatsapp') {
+          // Download image first
+          const link = document.createElement('a')
+          link.download = `كورس_${selectedCourse.trainee.name || 'متدرب'}.jpg`
+          link.href = canvas.toDataURL('image/jpeg', 0.95)
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+
+          // Format phone and open WhatsApp
+          const traineePhone = selectedCourse.trainee.phone
+          if (traineePhone) {
+            let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
+            if (formattedPhone.startsWith('0')) {
+              formattedPhone = '964' + formattedPhone.substring(1)
+            } else if (!formattedPhone.startsWith('964')) {
+              formattedPhone = '964' + formattedPhone
+            }
+
+            const text = `تمرين ${selectedCourse.trainee.name} - ${selectedCourse.numberOfDays} أيام\nالمدرب: ${selectedCourse.trainer.name}\n\n` +
+              (selectedCourse.days.map((day) =>
+                `اليوم ${day.dayNumber}:\n` +
+                day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
+              ).join('\n\n') || '')
+
+            window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`, '_blank')
+            toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. أرفق الصورة من جهازك وأرسلها.', duration: 8000 })
+          } else {
+            toast({ title: 'تنبيه', description: 'لا يوجد رقم هاتف للمتدرب. تم تحميل الصورة فقط.', duration: 5000 })
+          }
+        }
+      } catch (err) {
+        console.error('Capture error:', err)
+        toast({ title: 'خطأ', description: 'فشل في إنشاء الصورة', variant: 'destructive' })
+      }
+
+      cleanup()
+    }
+
+    const cleanup = () => {
+      setCaptureAction(null)
+      captureDoneRef.current = false
+      setIsCapturing(false)
+      // Go back from print preview after a short delay
+      setTimeout(() => setShowPrintPreview(false), 500)
+    }
+
+    performCapture()
+  }, [captureAction, showPrintPreview, selectedCourse, isCapturing, toast])
 
   const handleDelete = async () => {
     if (!deletingId) return
@@ -112,115 +203,24 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
 
   const closePrintPreview = () => {
     setShowPrintPreview(false)
+    setCaptureAction(null)
+    captureDoneRef.current = false
   }
 
-  const captureCanvas = async (): Promise<HTMLCanvasElement | null> => {
-    const el = shareRef.current
-    if (!el) return null
-    try {
-      // Temporarily move element on-screen for proper rendering
-      const parent = el.parentElement
-      if (parent) {
-        parent.style.cssText = 'position: fixed; left: 0; top: 0; z-index: -9999; opacity: 1; pointer-events: none;'
-      }
-      // Wait for render
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        width: el.scrollWidth,
-        height: el.scrollHeight,
-      })
-
-      // Restore off-screen position
-      if (parent) {
-        parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
-      }
-      return canvas
-    } catch (err) {
-      // Restore off-screen position on error
-      const parent = shareRef.current?.parentElement
-      if (parent) parent.style.cssText = 'position: fixed; left: -10000px; top: 0; z-index: -1;'
-      console.error('Image capture error:', err)
-      return null
-    }
+  // Start image capture - enters print preview then auto-captures
+  const startImageCapture = () => {
+    captureDoneRef.current = false
+    setCaptureAction('image')
+    reloadSettings()
+    setShowPrintPreview(true)
   }
 
-  const captureAndDownload = async () => {
-    setIsCapturing(true)
-    try {
-      const canvas = await captureCanvas()
-      if (!canvas) {
-        toast({ title: 'خطأ', description: 'لم يتم العثور على محتوى الكورس', variant: 'destructive' })
-        return
-      }
-      const link = document.createElement('a')
-      link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
-      link.href = canvas.toDataURL('image/jpeg', 0.95)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      toast({ title: 'تم التحميل', description: 'تم تحميل صورة الكورس بنجاح' })
-    } finally {
-      setIsCapturing(false)
-    }
-  }
-
-  const shareViaWhatsApp = async () => {
-    const traineePhone = selectedCourse?.trainee.phone
-    if (!traineePhone) {
-      toast({ title: 'خطأ', description: 'لا يوجد رقم هاتف للمتدرب. أضف رقم الهاتف أولاً.', variant: 'destructive' })
-      return
-    }
-
-    setIsCapturing(true)
-    try {
-      const canvas = await captureCanvas()
-      if (!canvas) {
-        toast({ title: 'خطأ', description: 'فشل في إنشاء صورة الكورس', variant: 'destructive' })
-        return
-      }
-
-      // Download image first so user can attach it manually
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
-      const link = document.createElement('a')
-      link.download = `كورس_${selectedCourse?.trainee.name || 'متدرب'}.jpg`
-      link.href = dataUrl
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      // Format phone number for WhatsApp (remove leading 0, add Iraq country code 964)
-      let formattedPhone = traineePhone.replace(/[\s\-\+]/g, '')
-      if (formattedPhone.startsWith('0')) {
-        formattedPhone = '964' + formattedPhone.substring(1)
-      } else if (!formattedPhone.startsWith('964') && !formattedPhone.startsWith('+')) {
-        formattedPhone = '964' + formattedPhone
-      }
-      formattedPhone = formattedPhone.replace('+', '')
-
-      // Build text message
-      const text = `تمرين ${selectedCourse?.trainee.name} - ${selectedCourse?.numberOfDays} أيام\nالمدرب: ${selectedCourse?.trainer.name}\n\n` +
-        (selectedCourse?.days.map((day) =>
-          `اليوم ${day.dayNumber}:\n` +
-          day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
-        ).join('\n\n') || '')
-
-      // Open WhatsApp with phone number and text
-      const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`
-      window.open(whatsappUrl, '_blank')
-
-      toast({ title: 'تم فتح واتساب', description: 'تم تحميل الصورة وفتح واتساب. قم بإرفاق الصورة المحملة من جهازك.', duration: 8000 })
-    } catch (err) {
-      console.error('Share error:', err)
-      toast({ title: 'خطأ', description: 'فشل في مشاركة الكورس', variant: 'destructive' })
-    } finally {
-      setIsCapturing(false)
-    }
+  // Start WhatsApp capture - enters print preview then auto-captures and opens WhatsApp
+  const startWhatsAppCapture = () => {
+    captureDoneRef.current = false
+    setCaptureAction('whatsapp')
+    reloadSettings()
+    setShowPrintPreview(true)
   }
 
   if (loading) {
@@ -231,7 +231,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
     )
   }
 
-  // Print Preview Mode
+  // Print Preview Mode OR Capture Mode
   if (showPrintPreview && selectedCourse) {
     return (
       <div className="space-y-4">
@@ -240,10 +240,17 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             <ArrowRight className="h-4 w-4" />
             رجوع
           </Button>
-          <Button onClick={doPrint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-            <Printer className="h-4 w-4" />
-            طباعة الآن
-          </Button>
+          {isCapturing ? (
+            <div className="flex items-center gap-2 text-emerald-600">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-600" />
+              <span className="text-sm font-medium">جارٍ تجهيز الصورة...</span>
+            </div>
+          ) : (
+            <Button onClick={doPrint} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+              <Printer className="h-4 w-4" />
+              طباعة الآن
+            </Button>
+          )}
         </div>
         <div id="print-area">
           <CoursePrintContent course={selectedCourse} settings={printSettings} />
@@ -277,10 +284,10 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-all"
           >
             <Printer className="h-6 w-6 text-emerald-600" />
-            <span className="text-sm font-semibold">طباعة</span>
+            <span className="text-sm font-semibold">طباعة / PDF</span>
           </Button>
           <Button
-            onClick={() => { reloadSettings(); captureAndDownload() }}
+            onClick={startImageCapture}
             variant="outline"
             disabled={isCapturing}
             className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
@@ -441,13 +448,6 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           ))}
         </Tabs>
 
-        {/* Hidden Share Content */}
-        <div style={{ position: 'fixed', left: '-10000px', top: '0', zIndex: -1 }}>
-          <div ref={shareRef} id="share-content">
-            <CoursePrintContent course={selectedCourse} settings={printSettings} />
-          </div>
-        </div>
-
         {/* Share Dialog */}
         <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
           <DialogContent className="sm:max-w-md" dir="rtl">
@@ -480,9 +480,9 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
             </div>
             <DialogFooter className="gap-2 flex-col">
               <Button
-                onClick={async () => {
+                onClick={() => {
                   setShareDialogOpen(false)
-                  await shareViaWhatsApp()
+                  startWhatsAppCapture()
                 }}
                 disabled={!selectedCourse.trainee.phone || isCapturing}
                 className="w-full bg-green-600 hover:bg-green-700 gap-2 h-12 text-base"
@@ -495,11 +495,11 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                 {isCapturing ? 'جارٍ التحضير...' : 'إرسال عبر واتساب'}
               </Button>
               <div className="grid grid-cols-2 gap-2 w-full">
-                <Button onClick={() => { setShareDialogOpen(false); captureAndDownload() }} variant="outline" className="gap-2">
+                <Button onClick={() => { setShareDialogOpen(false); startImageCapture() }} variant="outline" className="gap-2">
                   <Download className="h-4 w-4" />
                   تحميل كصورة
                 </Button>
-                <Button onClick={() => { setShareDialogOpen(false); setShowPrintPreview(true) }} variant="outline" className="gap-2">
+                <Button onClick={() => { setShareDialogOpen(false); reloadSettings(); setShowPrintPreview(true) }} variant="outline" className="gap-2">
                   <Printer className="h-4 w-4" />
                   طباعة / PDF
                 </Button>
