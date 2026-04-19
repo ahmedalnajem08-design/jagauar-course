@@ -50,6 +50,8 @@ interface DayData {
   exercises: DayExercise[]
 }
 
+const DRAFT_KEY = 'jagauar_course_draft'
+
 export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const { user } = useAuth()
   const [trainees, setTrainees] = useState<Trainee[]>([])
@@ -66,6 +68,35 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const [superSetMode, setSuperSetMode] = useState(false)  // وضع السوبر سيت
   const [superSetFirst, setSuperSetFirst] = useState<string | null>(null)  // أول تمرين في السوبر سيت
   const { toast } = useToast()
+
+  // حفظ المسودة في localStorage
+  const saveDraft = useCallback((data: { step: number; selectedTrainee: string; numberOfDays: number; days: DayData[]; activeDay: number }) => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(data))
+    } catch {}
+  }, [])
+
+  // استعادة المسودة من localStorage
+  const restoreDraft = useCallback((): { step: number; selectedTrainee: string; numberOfDays: number; days: DayData[]; activeDay: number } | null => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // التحقق من صحة البيانات
+        if (parsed && parsed.days && Array.isArray(parsed.days) && parsed.numberOfDays) {
+          return parsed
+        }
+      }
+    } catch {}
+    return null
+  }, [])
+
+  // مسح المسودة
+  const clearDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch {}
+  }, [])
 
   const fetchData = useCallback(async () => {
     if (!user) return
@@ -85,7 +116,19 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     }
   }, [toast, user])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+    // استعادة المسودة بعد تحميل البيانات
+    const draft = restoreDraft()
+    if (draft) {
+      setStep(draft.step)
+      setSelectedTrainee(draft.selectedTrainee)
+      setNumberOfDays(draft.numberOfDays)
+      setDays(draft.days)
+      setActiveDay(draft.activeDay)
+      toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
+    }
+  }, [fetchData])
 
   const initializeDays = (num: number) => {
     const newDays: DayData[] = []
@@ -101,6 +144,13 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       initializeDays(numberOfDays)
     }
   }, [numberOfDays])
+
+  // حفظ المسودة عند أي تغيير
+  useEffect(() => {
+    if (step > 1 || selectedTrainee || days.length > 0) {
+      saveDraft({ step, selectedTrainee, numberOfDays, days, activeDay })
+    }
+  }, [step, selectedTrainee, numberOfDays, days, activeDay, saveDraft])
 
   const generateSuperSetId = () => {
     return 'ss_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
@@ -298,6 +348,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
         }),
       })
       toast({ title: 'تم الحفظ', description: 'تم إنشاء الكورس بنجاح' })
+      clearDraft()
       setStep(1)
       setSelectedTrainee('')
       setNumberOfDays(5)
