@@ -464,7 +464,9 @@ export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () 
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `خطأ في الخادم (${res.status})`)
+        const detailMsg = errorData.details ? ` - ${errorData.details}` : ''
+        const codeMsg = errorData.code ? ` (${errorData.code})` : ''
+        throw new Error(`${errorData.error || 'خطأ في الخادم'}${codeMsg}${detailMsg}`)
       }
 
       toast({ title: isEditing ? 'تم التحديث' : 'تم الحفظ', description: isEditing ? 'تم تحديث الكورس بنجاح' : 'تم إنشاء الكورس بنجاح' })

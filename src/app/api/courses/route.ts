@@ -61,19 +61,28 @@ export async function POST(request: NextRequest) {
     
     console.log('[API /courses] POST - traineeId:', traineeId, 'trainerId:', trainerId, 'numberOfDays:', numberOfDays, 'days:', days?.length)
 
+    // Validate required fields
+    if (!traineeId || !trainerId || !numberOfDays || !days || !Array.isArray(days)) {
+      console.error('[API /courses] POST validation failed - missing required fields')
+      return NextResponse.json({ 
+        error: 'بيانات ناقصة', 
+        details: `traineeId: ${!!traineeId}, trainerId: ${!!trainerId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}` 
+      }, { status: 400 })
+    }
+
     const course = await db.course.create({
       data: {
         traineeId,
         trainerId,
         numberOfDays,
         days: {
-          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
+          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
               create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
-                customSets: ex.customSets,
-                customReps: ex.customReps,
+                customSets: ex.customSets ?? null,
+                customReps: ex.customReps ?? null,
                 freeText: ex.freeText || null,
                 superSetId: ex.superSetId || null,
                 order: index,
@@ -89,10 +98,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log('[API /courses] POST success - course created with id:', course.id)
     return NextResponse.json(course, { status: 201 })
-  } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to create course' }, { status: 500 })
+  } catch (error: any) {
+    console.error('[API /courses] POST error:', error)
+    const errorMessage = error?.message || 'خطأ غير معروف'
+    const errorCode = error?.code || ''
+    return NextResponse.json({ 
+      error: 'فشل في إنشاء الكورس', 
+      details: errorMessage,
+      code: errorCode
+    }, { status: 500 })
   }
 }
 
@@ -100,6 +116,13 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
     const { id, traineeId, numberOfDays, days } = body
+
+    if (!id || !traineeId || !numberOfDays || !days) {
+      return NextResponse.json({ 
+        error: 'بيانات ناقصة', 
+        details: `id: ${!!id}, traineeId: ${!!traineeId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}` 
+      }, { status: 400 })
+    }
 
     // Delete existing days and recreate
     await db.courseDayExercise.deleteMany({
@@ -115,13 +138,13 @@ export async function PUT(request: NextRequest) {
         traineeId,
         numberOfDays,
         days: {
-          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
+          create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
               create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
-                customSets: ex.customSets,
-                customReps: ex.customReps,
+                customSets: ex.customSets ?? null,
+                customReps: ex.customReps ?? null,
                 freeText: ex.freeText || null,
                 superSetId: ex.superSetId || null,
                 order: index,
@@ -138,9 +161,15 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json(course)
-  } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Failed to update course' }, { status: 500 })
+  } catch (error: any) {
+    console.error('[API /courses] PUT error:', error)
+    const errorMessage = error?.message || 'خطأ غير معروف'
+    const errorCode = error?.code || ''
+    return NextResponse.json({ 
+      error: 'فشل في تحديث الكورس', 
+      details: errorMessage,
+      code: errorCode
+    }, { status: 500 })
   }
 }
 
