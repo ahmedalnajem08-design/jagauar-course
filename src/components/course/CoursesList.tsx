@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
 import { type PrintSettings, usePrintSettings } from '@/hooks/use-settings'
-import { ClipboardList, Trash2, Printer, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Phone, VenusAndMars, MessageCircle, FileText } from 'lucide-react'
+import { ClipboardList, Trash2, Printer, ArrowRight, User, Weight, Ruler, Calendar, Dumbbell, Phone, VenusAndMars, MessageCircle, FileText, Pencil } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 
@@ -64,7 +64,7 @@ interface Course {
   days: CourseDay[]
 }
 
-export default function CoursesList({ refreshTrigger }: { refreshTrigger?: number }) {
+export default function CoursesList({ refreshTrigger, onEdit }: { refreshTrigger?: number; onEdit?: (courseId: string) => void }) {
   const { user } = useAuth()
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
@@ -341,7 +341,7 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Button
             onClick={() => { reloadSettings(); setWhatsappMode(false); setShowPrintPreview(true) }}
             variant="outline"
@@ -356,6 +356,14 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           >
             <MessageCircle className="h-6 w-6" />
             <span className="text-sm font-semibold">واتساب PDF</span>
+          </Button>
+          <Button
+            onClick={() => onEdit?.(selectedCourse.id)}
+            variant="outline"
+            className="h-auto py-4 flex flex-col items-center gap-2 border-2 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 transition-all"
+          >
+            <Pencil className="h-6 w-6 text-amber-600" />
+            <span className="text-sm font-semibold">تعديل</span>
           </Button>
           <Button
             onClick={() => {

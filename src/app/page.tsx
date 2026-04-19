@@ -27,10 +27,17 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState<NavId>('trainees')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [courseRefresh, setCourseRefresh] = useState(0)
+  const [editCourseId, setEditCourseId] = useState<string | null>(null)
 
   const handleCourseSaved = () => {
     setCourseRefresh((prev) => prev + 1)
+    setEditCourseId(null)
     setActiveTab('courses')
+  }
+
+  const handleEditCourse = (courseId: string) => {
+    setEditCourseId(courseId)
+    setActiveTab('create')
   }
 
   if (isLoading) {
@@ -154,8 +161,8 @@ function AppContent() {
           <div className="p-4 lg:p-8 max-w-7xl mx-auto">
             {activeTab === 'trainees' && <TraineesManager />}
             {activeTab === 'exercises' && <ExerciseGroupsManager />}
-            {activeTab === 'create' && <CourseBuilder onSaved={handleCourseSaved} />}
-            {activeTab === 'courses' && <CoursesList refreshTrigger={courseRefresh} />}
+            {activeTab === 'create' && <CourseBuilder onSaved={handleCourseSaved} editCourseId={editCourseId} />}
+            {activeTab === 'courses' && <CoursesList refreshTrigger={courseRefresh} onEdit={handleEditCourse} />}
             {activeTab === 'settings' && <SettingsManager />}
           </div>
         </main>

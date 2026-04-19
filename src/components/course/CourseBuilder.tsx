@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X, Search, Link2, Unlink } from 'lucide-react'
+import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X, Search, Link2, Unlink, Pencil } from 'lucide-react'
 
 interface Trainee {
   id: string
@@ -52,7 +52,7 @@ interface DayData {
 
 const DRAFT_KEY = 'jagauar_course_draft'
 
-export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
+export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () => void; editCourseId?: string | null }) {
   const { user } = useAuth()
   const [trainees, setTrainees] = useState<Trainee[]>([])
   const [groups, setGroups] = useState<ExerciseGroup[]>([])
@@ -69,6 +69,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const [superSetFirst, setSuperSetFirst] = useState<string | null>(null)  // أول تمرين في السوبر سيت
   const { toast } = useToast()
   const draftRestoredRef = useRef(false)
+  const isEditing = !!editCourseId
 
   // حفظ المسودة في localStorage
   const saveDraft = useCallback((data: { step: number; selectedTrainee: string; numberOfDays: number; days: DayData[]; activeDay: number }) => {
@@ -111,19 +112,57 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       setTrainees(tData)
       setGroups(gData)
 
-      // استعادة المسودة بعد تحميل البيانات
-      if (!draftRestoredRef.current) {
+      // ربط بيانات التمارين مع بيانات المجموعات المحملة
+      const allExercises: Exercise[] = []
+      gData.forEach((g: ExerciseGroup) => {
+        g.exercises.forEach((ex: Exercise) => {
+          allExercises.push({ ...ex, group: { name: g.name } })
+        })
+      })
+
+      // إذا كان هناك كورس للتعديل، حمّل بياناته
+      if (editCourseId && !draftRestoredRef.current) {
         draftRestoredRef.current = true
+        try {
+          const cRes = await fetch(`/api/courses?id=${editCourseId}`)
+          const courseData = await cRes.json()
+          if (courseData && courseData.days) {
+            setSelectedTrainee(courseData.traineeId)
+            setNumberOfDays(courseData.numberOfDays)
+            const loadedDays: DayData[] = courseData.days.map((day: any) => ({
+              dayNumber: day.dayNumber,
+              exercises: day.exercises.map((ex: any) => {
+                const fullExercise = allExercises.find((e: Exercise) => e.id === ex.exerciseId)
+                return {
+                  exerciseId: ex.exerciseId,
+                  exercise: fullExercise || {
+                    id: ex.exerciseId,
+                    name: ex.exercise?.name || 'تمرين',
+                    sets: ex.exercise?.sets || 3,
+                    reps: ex.exercise?.reps || 10,
+                    groupId: ex.exercise?.groupId || '',
+                    group: ex.exercise?.group,
+                  },
+                  customSets: ex.customSets || ex.exercise?.sets || 3,
+                  customReps: ex.customReps || ex.exercise?.reps || 10,
+                  freeText: ex.freeText || undefined,
+                  superSetId: ex.superSetId || undefined,
+                }
+              }),
+            }))
+            setDays(loadedDays)
+            setActiveDay(1)
+            setStep(3) // الانتقال مباشرة لخطوة التمارين
+            toast({ title: 'تعديل الكورس', description: 'تم تحميل بيانات الكورس للتعديل', duration: 3000 })
+          }
+        } catch {
+          toast({ title: 'خطأ', description: 'فشل في تحميل بيانات الكورس للتعديل', variant: 'destructive' })
+        }
+      } else if (!draftRestoredRef.current) {
+        draftRestoredRef.current = true
+        // استعادة المسودة بعد تحميل البيانات
         const draft = restoreDraft()
         if (draft && draft.days && Array.isArray(draft.days) && draft.numberOfDays) {
-          // ربط بيانات التمارين مع بيانات المجموعات المحملة
-          const allExercises: Exercise[] = []
-          gData.forEach((g: ExerciseGroup) => {
-            g.exercises.forEach((ex: Exercise) => {
-              allExercises.push({ ...ex, group: { name: g.name } })
-            })
-          })
-
           const enrichedDays = draft.days.map((day: DayData) => ({
             ...day,
             exercises: day.exercises.map((ex: DayExercise) => {
@@ -152,7 +191,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user, editCourseId])
 
   useEffect(() => {
     fetchData()
@@ -359,26 +398,39 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
 
     setSaving(true)
     try {
-      await fetch('/api/courses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          traineeId: selectedTrainee,
-          trainerId: user!.id,
-          numberOfDays,
-          days: daysWithExercises.map((d) => ({
-            dayNumber: d.dayNumber,
-            exercises: d.exercises.map((e) => ({
-              exerciseId: e.exerciseId,
-              customSets: e.customSets,
-              customReps: e.customReps,
-              freeText: e.freeText && e.freeText.trim() ? e.freeText.trim() : null,
-              superSetId: e.superSetId || null,
-            })),
+      const courseData = {
+        traineeId: selectedTrainee,
+        trainerId: user!.id,
+        numberOfDays,
+        days: daysWithExercises.map((d) => ({
+          dayNumber: d.dayNumber,
+          exercises: d.exercises.map((e) => ({
+            exerciseId: e.exerciseId,
+            customSets: e.customSets,
+            customReps: e.customReps,
+            freeText: e.freeText && e.freeText.trim() ? e.freeText.trim() : null,
+            superSetId: e.superSetId || null,
           })),
-        }),
-      })
-      toast({ title: 'تم الحفظ', description: 'تم إنشاء الكورس بنجاح' })
+        })),
+      }
+
+      if (isEditing && editCourseId) {
+        // تحديث كورس موجود
+        await fetch('/api/courses', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editCourseId, ...courseData }),
+        })
+        toast({ title: 'تم التحديث', description: 'تم تحديث الكورس بنجاح' })
+      } else {
+        // إنشاء كورس جديد
+        await fetch('/api/courses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(courseData),
+        })
+        toast({ title: 'تم الحفظ', description: 'تم إنشاء الكورس بنجاح' })
+      }
       clearDraft()
       setStep(1)
       setSelectedTrainee('')
@@ -387,7 +439,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       draftRestoredRef.current = false
       onSaved?.()
     } catch {
-      toast({ title: 'خطأ', description: 'فشل في إنشاء الكورس', variant: 'destructive' })
+      toast({ title: 'خطأ', description: isEditing ? 'فشل في تحديث الكورس' : 'فشل في إنشاء الكورس', variant: 'destructive' })
     } finally {
       setSaving(false)
     }
@@ -432,11 +484,11 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
-          <Save className="h-6 w-6 text-emerald-600" />
+        <div className={`p-2 rounded-lg ${isEditing ? 'bg-amber-100 dark:bg-amber-900' : 'bg-emerald-100 dark:bg-emerald-900'}`}>
+          {isEditing ? <Pencil className="h-6 w-6 text-amber-600" /> : <Save className="h-6 w-6 text-emerald-600" />}
         </div>
         <div>
-          <h2 className="text-2xl font-bold">إنشاء كورس جديد</h2>
+          <h2 className="text-2xl font-bold">{isEditing ? 'تعديل الكورس' : 'إنشاء كورس جديد'}</h2>
           <p className="text-muted-foreground">خطوة {step} من 4</p>
         </div>
       </div>
@@ -917,13 +969,15 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
               <Button variant="outline" onClick={() => setStep(3)} className="gap-2">
                 <ArrowRight className="h-4 w-4" /> السابق
               </Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+              <Button onClick={handleSave} disabled={saving} className={`${isEditing ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'} gap-2`}>
                 {saving ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : isEditing ? (
+                  <Pencil className="h-4 w-4" />
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                حفظ الكورس
+                {isEditing ? 'تحديث الكورس' : 'حفظ الكورس'}
               </Button>
             </div>
           </CardContent>
