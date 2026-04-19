@@ -1,8 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-// هذا الـ endpoint يختبر اتصال قاعدة البيانات ويشوف إذا الـ schema متزامن
-// يُستخدم للتشخيص فقط
+// GET: فحص حالة قاعدة البيانات والتشخيص
 export async function GET(request: NextRequest) {
   const results: Record<string, any> = {
     timestamp: new Date().toISOString(),
@@ -11,9 +10,9 @@ export async function GET(request: NextRequest) {
       hasTursoUrl: !!process.env.TURSO_DATABASE_URL,
       hasTursoToken: !!process.env.TURSO_AUTH_TOKEN,
       hasDatabaseUrl: !!process.env.DATABASE_URL,
-      tursoUrlPrefix: process.env.TURSO_DATABASE_URL?.substring(0, 30) + '...' || 'not set',
     },
     tests: {},
+    fixes: [],
   }
 
   // Test 1: Basic connection
@@ -36,108 +35,119 @@ export async function GET(request: NextRequest) {
     results.tests.tables = { status: 'error', message: e.message }
   }
 
-  // Test 3: Check CourseDayExercise columns (specifically superSetId)
-  try {
-    const columns: any[] = await db.$queryRaw`PRAGMA table_info(CourseDayExercise)`
-    results.tests.courseDayExerciseColumns = {
-      status: 'ok',
-      columns: columns.map((c: any) => ({ name: c.name, type: c.type })),
-      hasSuperSetId: columns.some((c: any) => c.name === 'superSetId'),
-    }
-  } catch (e: any) {
-    results.tests.courseDayExerciseColumns = { status: 'error', message: e.message }
-  }
-
-  // Test 4: Try a simple course creation and rollback
-  try {
-    const trainers = await db.trainer.findMany({ take: 1 })
-    const trainees = await db.trainee.findMany({ take: 1 })
-    const exercises = await db.exercise.findMany({ take: 1 })
-
-    results.tests.data = {
-      status: 'ok',
-      trainerCount: await db.trainer.count(),
-      traineeCount: await db.trainee.count(),
-      exerciseCount: await db.exercise.count(),
-      courseCount: await db.course.count(),
-    }
-
-    if (trainers.length > 0 && trainees.length > 0 && exercises.length > 0) {
-      results.tests.createTest = {
-        status: 'can_test',
-        trainerId: trainers[0].id,
-        traineeId: trainees[0].id,
-        exerciseId: exercises[0].id,
+  // Test 3: Check all table columns
+  const requiredTables = ['CourseDayExercise', 'CourseDay', 'Course', 'Exercise', 'ExerciseGroup', 'Trainee', 'Trainer']
+  for (const tableName of requiredTables) {
+    try {
+      const columns: any[] = await db.$queryRaw`PRAGMA table_info(${tableName})`
+      results.tests[`${tableName}_columns`] = {
+        status: 'ok',
+        columns: columns.map((c: any) => ({ name: c.name, type: c.type, notnull: c.notnull })),
       }
-    } else {
-      results.tests.createTest = {
-        status: 'no_data',
-        message: 'لا توجد بيانات كافية لاختبار إنشاء كورس (يحتاج مدرب، متدرب، وتمرين)',
-      }
+    } catch (e: any) {
+      results.tests[`${tableName}_columns`] = { status: 'error', message: e.message }
     }
-  } catch (e: any) {
-    results.tests.data = { status: 'error', message: e.message }
   }
 
   return NextResponse.json(results)
 }
 
-// POST: محاولة إنشاء كورس اختباري وحذفه فوراً
+// POST: إصلاح الـ schema تلقائياً - إضافة الأعمدة الناقصة
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { traineeId, trainerId, exerciseId } = body
-
-    if (!traineeId || !trainerId || !exerciseId) {
-      return NextResponse.json({ error: 'يرجى توفير traineeId, trainerId, exerciseId' }, { status: 400 })
-    }
-
-    // محاولة إنشاء كورس
-    const course = await db.course.create({
-      data: {
-        traineeId,
-        trainerId,
-        numberOfDays: 1,
-        days: {
-          create: [{
-            dayNumber: 1,
-            exercises: {
-              create: [{
-                exerciseId,
-                customSets: 3,
-                customReps: 10,
-                order: 0,
-              }],
-            },
-          }],
-        },
-      },
-      include: {
-        days: { include: { exercises: true } },
-      },
-    })
-
-    // حذف الكورس الاختباري
-    await db.courseDayExercise.deleteMany({
-      where: { courseDay: { courseId: course.id } },
-    })
-    await db.courseDay.deleteMany({
-      where: { courseId: course.id },
-    })
-    await db.course.delete({ where: { id: course.id } })
-
-    return NextResponse.json({
-      status: 'ok',
-      message: 'تم إنشاء وحذف كورس اختباري بنجاح - قاعدة البيانات تعمل بشكل صحيح',
-      courseId: course.id,
-    })
-  } catch (error: any) {
-    return NextResponse.json({
-      status: 'error',
-      message: 'فشل إنشاء كورس اختباري',
-      error: error.message,
-      code: error.code,
-      meta: error.meta,
-    }, { status: 500 })
+  const results: Record<string, any> = {
+    timestamp: new Date().toISOString(),
+    database: process.env.TURSO_DATABASE_URL ? 'turso (cloud)' : 'local (sqlite)',
+    fixes: [],
+    errors: [],
   }
+
+  // قائمة الأعمدة المطلوبة لكل جدول
+  const requiredColumns: Record<string, { name: string; type: string; sql: string }[]> = {
+    CourseDayExercise: [
+      { name: 'freeText', type: 'TEXT', sql: 'ALTER TABLE CourseDayExercise ADD COLUMN freeText TEXT' },
+      { name: 'superSetId', type: 'TEXT', sql: 'ALTER TABLE CourseDayExercise ADD COLUMN superSetId TEXT' },
+      { name: 'order', type: 'INTEGER', sql: 'ALTER TABLE CourseDayExercise ADD COLUMN "order" INTEGER NOT NULL DEFAULT 0' },
+    ],
+    CourseDay: [],
+    Course: [],
+    Exercise: [],
+    ExerciseGroup: [],
+    Trainee: [],
+    Trainer: [],
+  }
+
+  for (const [tableName, columns] of Object.entries(requiredColumns)) {
+    if (columns.length === 0) continue
+
+    try {
+      // الحصول على الأعمدة الموجودة
+      const existingColumns: any[] = await db.$queryRaw`PRAGMA table_info(${tableName})`
+      const existingNames = new Set(existingColumns.map((c: any) => c.name))
+
+      for (const col of columns) {
+        if (!existingNames.has(col.name)) {
+          try {
+            await db.$executeRawUnsafe(col.sql)
+            results.fixes.push({ table: tableName, column: col.name, status: 'added' })
+          } catch (e: any) {
+            // إذا العمود موجود فعلاً، لا تعتبره خطأ
+            if (e.message?.includes('duplicate column name')) {
+              results.fixes.push({ table: tableName, column: col.name, status: 'already_exists' })
+            } else {
+              results.errors.push({ table: tableName, column: col.name, error: e.message })
+            }
+          }
+        } else {
+          results.fixes.push({ table: tableName, column: col.name, status: 'already_exists' })
+        }
+      }
+    } catch (e: any) {
+      results.errors.push({ table: tableName, error: e.message })
+    }
+  }
+
+  // التحقق النهائي - محاولة إنشاء كورس اختباري
+  try {
+    const trainer = await db.trainer.findFirst()
+    const trainee = await db.trainee.findFirst()
+    const exercise = await db.exercise.findFirst()
+
+    if (trainer && trainee && exercise) {
+      const course = await db.course.create({
+        data: {
+          traineeId: trainee.id,
+          trainerId: trainer.id,
+          numberOfDays: 1,
+          days: {
+            create: [{
+              dayNumber: 1,
+              exercises: {
+                create: [{
+                  exerciseId: exercise.id,
+                  customSets: 3,
+                  customReps: 10,
+                  freeText: null,
+                  superSetId: null,
+                  order: 0,
+                }],
+              },
+            }],
+          },
+        },
+      })
+
+      // حذف الكورس الاختباري
+      await db.courseDayExercise.deleteMany({ where: { courseDay: { courseId: course.id } } })
+      await db.courseDay.deleteMany({ where: { courseId: course.id } })
+      await db.course.delete({ where: { id: course.id } })
+
+      results.testCreate = { status: 'ok', message: 'تم إنشاء وحذف كورس اختباري بنجاح!' }
+    } else {
+      results.testCreate = { status: 'skipped', message: 'لا توجد بيانات كافية للاختبار (يحتاج مدرب + متدرب + تمرين)' }
+    }
+  } catch (e: any) {
+    results.testCreate = { status: 'error', message: e.message, code: e.code, meta: e.meta }
+  }
+
+  return NextResponse.json(results)
 }
