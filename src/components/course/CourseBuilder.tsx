@@ -68,6 +68,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const [superSetMode, setSuperSetMode] = useState(false)  // وضع السوبر سيت
   const [superSetFirst, setSuperSetFirst] = useState<string | null>(null)  // أول تمرين في السوبر سيت
   const { toast } = useToast()
+  const draftRestoredRef = useRef(false)
 
   // حفظ المسودة في localStorage
   const saveDraft = useCallback((data: { step: number; selectedTrainee: string; numberOfDays: number; days: DayData[]; activeDay: number }) => {
@@ -98,11 +99,6 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     } catch {}
   }, [])
 
-  // مرجع لمنع initializeDays من العمل أثناء استعادة المسودة
-  const isRestoringRef = useRef(false)
-  // مرجع لتتبع هل تم استعادة المسودة
-  const draftRestoredRef = useRef(false)
-
   const fetchData = useCallback(async () => {
     if (!user) return
     try {
@@ -115,12 +111,11 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       setTrainees(tData)
       setGroups(gData)
 
-      // استعادة المسودة بعد تحميل البيانات (بعد الـ await)
+      // استعادة المسودة بعد تحميل البيانات
       if (!draftRestoredRef.current) {
         draftRestoredRef.current = true
         const draft = restoreDraft()
-        if (draft) {
-          isRestoringRef.current = true
+        if (draft && draft.days && Array.isArray(draft.days) && draft.numberOfDays) {
           // ربط بيانات التمارين مع بيانات المجموعات المحملة
           const allExercises: Exercise[] = []
           gData.forEach((g: ExerciseGroup) => {
@@ -132,7 +127,6 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
           const enrichedDays = draft.days.map((day: DayData) => ({
             ...day,
             exercises: day.exercises.map((ex: DayExercise) => {
-              // إيجاد بيانات التمرين الكاملة من البيانات المحملة
               const fullExercise = allExercises.find((e: Exercise) => e.id === ex.exerciseId)
               return {
                 ...ex,
@@ -147,8 +141,9 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
           setDays(enrichedDays)
           setActiveDay(draft.activeDay)
           toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
-          // تأخير إيقاف وضع الاستعادة حتى تنتهي كل التحديثات
-          setTimeout(() => { isRestoringRef.current = false }, 200)
+        } else {
+          // كورس جديد - إنشاء أيام فارغة
+          initializeDays(numberOfDays)
         }
       }
     } catch {
@@ -156,12 +151,14 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     } finally {
       setLoading(false)
     }
-  }, [toast, user, restoreDraft])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
 
+  // دالة تغيير عدد الأيام - تُستدعى يدوياً فقط من الـ UI
   const initializeDays = useCallback((num: number) => {
     setDays((prevDays) => {
       const newDays: DayData[] = []
@@ -173,12 +170,11 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     })
   }, [])
 
-  useEffect(() => {
-    if (isRestoringRef.current) return
-    if (numberOfDays > 0) {
-      initializeDays(numberOfDays)
-    }
-  }, [numberOfDays, initializeDays])
+  // دالة تغيير عدد الأيام - تُستدعى من الـ UI فقط وليس من useEffect
+  const changeNumberOfDays = useCallback((newNum: number) => {
+    setNumberOfDays(newNum)
+    initializeDays(newNum)
+  }, [initializeDays])
 
   // حفظ المسودة عند أي تغيير
   useEffect(() => {
@@ -388,6 +384,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       setSelectedTrainee('')
       setNumberOfDays(5)
       setDays([])
+      draftRestoredRef.current = false
       onSaved?.()
     } catch {
       toast({ title: 'خطأ', description: 'فشل في إنشاء الكورس', variant: 'destructive' })
@@ -539,7 +536,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center gap-4 justify-center">
-              <Button variant="outline" size="icon" onClick={() => setNumberOfDays(Math.max(1, numberOfDays - 1))} className="h-12 w-12">
+              <Button variant="outline" size="icon" onClick={() => changeNumberOfDays(Math.max(1, numberOfDays - 1))} className="h-12 w-12">
                 -
               </Button>
               <div className="text-center">
@@ -548,18 +545,18 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                   min={1}
                   max={30}
                   value={numberOfDays}
-                  onChange={(e) => setNumberOfDays(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => changeNumberOfDays(Math.min(30, Math.max(1, parseInt(e.target.value) || 1)))}
                   className="text-center text-3xl font-bold h-16 w-24"
                 />
                 <Label className="mt-2 text-muted-foreground">يوم</Label>
               </div>
-              <Button variant="outline" size="icon" onClick={() => setNumberOfDays(Math.min(30, numberOfDays + 1))} className="h-12 w-12">
+              <Button variant="outline" size="icon" onClick={() => changeNumberOfDays(Math.min(30, numberOfDays + 1))} className="h-12 w-12">
                 +
               </Button>
             </div>
             <div className="flex gap-4">
               {[3, 5, 7].map((n) => (
-                <Button key={n} variant={numberOfDays === n ? 'default' : 'outline'} onClick={() => setNumberOfDays(n)} className={numberOfDays === n ? 'bg-emerald-600 hover:bg-emerald-700' : ''}>
+                <Button key={n} variant={numberOfDays === n ? 'default' : 'outline'} onClick={() => changeNumberOfDays(n)} className={numberOfDays === n ? 'bg-emerald-600 hover:bg-emerald-700' : ''}>
                   {n} أيام
                 </Button>
               ))}
