@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -98,6 +98,11 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     } catch {}
   }, [])
 
+  // مرجع لمنع initializeDays من العمل أثناء استعادة المسودة
+  const isRestoringRef = useRef(false)
+  // مرجع لتتبع هل تم استعادة المسودة
+  const draftRestoredRef = useRef(false)
+
   const fetchData = useCallback(async () => {
     if (!user) return
     try {
@@ -109,41 +114,71 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
       const gData = await gRes.json()
       setTrainees(tData)
       setGroups(gData)
+
+      // استعادة المسودة بعد تحميل البيانات (بعد الـ await)
+      if (!draftRestoredRef.current) {
+        draftRestoredRef.current = true
+        const draft = restoreDraft()
+        if (draft) {
+          isRestoringRef.current = true
+          // ربط بيانات التمارين مع بيانات المجموعات المحملة
+          const allExercises: Exercise[] = []
+          gData.forEach((g: ExerciseGroup) => {
+            g.exercises.forEach((ex: Exercise) => {
+              allExercises.push({ ...ex, group: { name: g.name } })
+            })
+          })
+
+          const enrichedDays = draft.days.map((day: DayData) => ({
+            ...day,
+            exercises: day.exercises.map((ex: DayExercise) => {
+              // إيجاد بيانات التمرين الكاملة من البيانات المحملة
+              const fullExercise = allExercises.find((e: Exercise) => e.id === ex.exerciseId)
+              return {
+                ...ex,
+                exercise: fullExercise || ex.exercise,
+              }
+            }),
+          }))
+
+          setStep(draft.step)
+          setSelectedTrainee(draft.selectedTrainee)
+          setNumberOfDays(draft.numberOfDays)
+          setDays(enrichedDays)
+          setActiveDay(draft.activeDay)
+          toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
+          // تأخير إيقاف وضع الاستعادة حتى تنتهي كل التحديثات
+          setTimeout(() => { isRestoringRef.current = false }, 200)
+        }
+      }
     } catch {
       toast({ title: 'خطأ', description: 'فشل في تحميل البيانات', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
-  }, [toast, user])
+  }, [toast, user, restoreDraft])
 
   useEffect(() => {
     fetchData()
-    // استعادة المسودة بعد تحميل البيانات
-    const draft = restoreDraft()
-    if (draft) {
-      setStep(draft.step)
-      setSelectedTrainee(draft.selectedTrainee)
-      setNumberOfDays(draft.numberOfDays)
-      setDays(draft.days)
-      setActiveDay(draft.activeDay)
-      toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
-    }
   }, [fetchData])
 
-  const initializeDays = (num: number) => {
-    const newDays: DayData[] = []
-    for (let i = 1; i <= num; i++) {
-      const existing = days.find((d) => d.dayNumber === i)
-      newDays.push(existing || { dayNumber: i, exercises: [] })
-    }
-    setDays(newDays)
-  }
+  const initializeDays = useCallback((num: number) => {
+    setDays((prevDays) => {
+      const newDays: DayData[] = []
+      for (let i = 1; i <= num; i++) {
+        const existing = prevDays.find((d) => d.dayNumber === i)
+        newDays.push(existing || { dayNumber: i, exercises: [] })
+      }
+      return newDays
+    })
+  }, [])
 
   useEffect(() => {
+    if (isRestoringRef.current) return
     if (numberOfDays > 0) {
       initializeDays(numberOfDays)
     }
-  }, [numberOfDays])
+  }, [numberOfDays, initializeDays])
 
   // حفظ المسودة عند أي تغيير
   useEffect(() => {
