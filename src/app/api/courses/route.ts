@@ -1,12 +1,29 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
+// ضمان إن أعمدة السوبر سيت والنص الحر موجودة في قاعدة البيانات
+let schemaFixed = false
+async function ensureSchema() {
+  if (schemaFixed) return
+  const alterCommands = [
+    'ALTER TABLE CourseDayExercise ADD COLUMN freeText TEXT',
+    'ALTER TABLE CourseDayExercise ADD COLUMN superSetId TEXT',
+    'ALTER TABLE "CourseDayExercise" ADD COLUMN "order" INTEGER NOT NULL DEFAULT 0',
+  ]
+  for (const sql of alterCommands) {
+    try {
+      await db.$executeRawUnsafe(sql)
+    } catch {
+      // العمود موجود فعلاً - لا مشكلة
+    }
+  }
+  schemaFixed = true
+}
+
 export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get('id')
     const trainerId = request.nextUrl.searchParams.get('trainerId')
-    
-    console.log('[API /courses] GET request - id:', id, 'trainerId:', trainerId)
 
     if (id) {
       const course = await db.course.findUnique({
@@ -46,7 +63,6 @@ export async function GET(request: NextRequest) {
         },
       },
     })
-    console.log('[API /courses] Returning', courses.length, 'courses for trainerId:', trainerId)
     return NextResponse.json(courses)
   } catch (error) {
     console.error('[API /courses] GET error:', error)
@@ -56,17 +72,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // تأكد إن الـ schema محدث قبل إنشاء الكورس
+    await ensureSchema()
+
     const body = await request.json()
     const { traineeId, trainerId, numberOfDays, days } = body
-    
-    console.log('[API /courses] POST - traineeId:', traineeId, 'trainerId:', trainerId, 'numberOfDays:', numberOfDays, 'days:', days?.length)
 
-    // Validate required fields
     if (!traineeId || !trainerId || !numberOfDays || !days || !Array.isArray(days)) {
-      console.error('[API /courses] POST validation failed - missing required fields')
-      return NextResponse.json({ 
-        error: 'بيانات ناقصة', 
-        details: `traineeId: ${!!traineeId}, trainerId: ${!!trainerId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}` 
+      return NextResponse.json({
+        error: 'بيانات ناقصة',
+        details: `traineeId: ${!!traineeId}, trainerId: ${!!trainerId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}`
       }, { status: 400 })
     }
 
@@ -98,14 +113,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log('[API /courses] POST success - course created with id:', course.id)
     return NextResponse.json(course, { status: 201 })
   } catch (error: any) {
     console.error('[API /courses] POST error:', error)
     const errorMessage = error?.message || 'خطأ غير معروف'
     const errorCode = error?.code || ''
-    return NextResponse.json({ 
-      error: 'فشل في إنشاء الكورس', 
+    return NextResponse.json({
+      error: 'فشل في إنشاء الكورس',
       details: errorMessage,
       code: errorCode
     }, { status: 500 })
@@ -114,13 +128,16 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // تأكد إن الـ schema محدث قبل تحديث الكورس
+    await ensureSchema()
+
     const body = await request.json()
     const { id, traineeId, numberOfDays, days } = body
 
     if (!id || !traineeId || !numberOfDays || !days) {
-      return NextResponse.json({ 
-        error: 'بيانات ناقصة', 
-        details: `id: ${!!id}, traineeId: ${!!traineeId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}` 
+      return NextResponse.json({
+        error: 'بيانات ناقصة',
+        details: `id: ${!!id}, traineeId: ${!!traineeId}, numberOfDays: ${!!numberOfDays}, days: ${!!days}`
       }, { status: 400 })
     }
 
@@ -165,8 +182,8 @@ export async function PUT(request: NextRequest) {
     console.error('[API /courses] PUT error:', error)
     const errorMessage = error?.message || 'خطأ غير معروف'
     const errorCode = error?.code || ''
-    return NextResponse.json({ 
-      error: 'فشل في تحديث الكورس', 
+    return NextResponse.json({
+      error: 'فشل في تحديث الكورس',
       details: errorMessage,
       code: errorCode
     }, { status: 500 })
