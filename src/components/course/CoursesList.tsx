@@ -219,14 +219,17 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                   groups.push({ type: 'single', exercises: [ex] })
                 }
               })
+              let rowNum = 0
               return `اليوم ${day.dayNumber}:\n` +
                 groups.map((g) => {
+                  rowNum++
                   if (g.type === 'superset') {
-                    return `★ سوبر سيت:\n` +
-                      g.exercises.map((ex) => `  - ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
+                    const firstEx = g.exercises[0]
+                    const combinedName = g.exercises.map((e) => e.exercise.name).join(' + ')
+                    return `${rowNum}. ★ سوبر سيت: ${combinedName} - ${firstEx.freeText || `${firstEx.customSets || firstEx.exercise.sets}x${firstEx.customReps || firstEx.exercise.reps}`}`
                   }
                   const ex = g.exercises[0]
-                  return `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`
+                  return `${rowNum}. ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`
                 }).join('\n')
             }).join('\n\n') || '')
 
@@ -477,25 +480,31 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                         <div className="space-y-2">
                           {groups.map((group) => {
                             if (group.type === 'superset') {
+                              const firstEx = group.exercises[0]
+                              const combinedName = group.exercises.map((e) => e.exercise.name).join(' + ')
+                              rowNum++
                               return (
                                 <div key={group.superSetId} className="border-2 border-purple-300 dark:border-purple-700 rounded-lg overflow-hidden">
-                                  <div className="bg-purple-50 dark:bg-purple-950 px-3 py-1 flex items-center gap-2">
-                                    <span className="text-xs font-bold text-purple-600">سوبر سيت</span>
-                                  </div>
                                   <table className="w-full text-sm">
                                     <tbody>
-                                      {group.exercises.map((ex) => {
-                                        rowNum++
-                                        return (
-                                          <tr key={ex.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                                            <td className="py-2 px-3 w-8">{rowNum}</td>
-                                            <td className="py-2 px-3 font-medium">{ex.exercise.name}</td>
-                                            <td className="py-2 px-3 text-center"><Badge variant="outline" className="text-xs">{ex.exercise.group?.name || '-'}</Badge></td>
-                                            <td className="py-2 px-3 text-center w-20">{ex.freeText ? <span className="text-emerald-600 font-medium">{ex.freeText}</span> : (ex.customSets || ex.exercise.sets)}</td>
-                                            <td className="py-2 px-3 text-center w-20">{ex.freeText ? <span className="text-emerald-600 font-medium">-</span> : (ex.customReps || ex.exercise.reps)}</td>
-                                          </tr>
-                                        )
-                                      })}
+                                      <tr className="bg-purple-50 dark:bg-purple-950 hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors">
+                                        <td className="py-3 px-4 w-8">{rowNum}</td>
+                                        <td className="py-3 px-4 font-medium text-purple-800 dark:text-purple-200">
+                                          <span className="inline-flex items-center gap-1.5">
+                                            <Badge className="text-[10px] bg-purple-600 text-white px-1.5 py-0">سوبر سيت</Badge>
+                                            {combinedName}
+                                          </span>
+                                        </td>
+                                        <td className="py-3 px-4 text-center"><Badge variant="outline" className="text-xs border-purple-300 text-purple-600">{firstEx.exercise.group?.name || '-'}</Badge></td>
+                                        {firstEx.freeText ? (
+                                          <td colSpan={2} className="py-3 px-4 text-center"><span className="text-emerald-600 font-medium">{firstEx.freeText}</span></td>
+                                        ) : (
+                                          <>
+                                            <td className="py-3 px-4 text-center w-20">{firstEx.customSets || firstEx.exercise.sets}</td>
+                                            <td className="py-3 px-4 text-center w-20">{firstEx.customReps || firstEx.exercise.reps}</td>
+                                          </>
+                                        )}
+                                      </tr>
                                     </tbody>
                                   </table>
                                 </div>
@@ -861,32 +870,26 @@ function CoursePrintContent({ course, settings }: {
                 let rowNum = 0
                 return groups.map((group) => {
                   if (group.type === 'superset') {
+                    const firstEx = group.exercises[0]
+                    const combinedName = group.exercises.map((e) => e.exercise.name).join(' + ')
+                    rowNum++
                     return (
-                      <>
-                        <tr key={`ss-header-${group.superSetId}`} style={{ background: `${accentColor}15` }}>
-                          <td colSpan={5} style={{ padding: `${settings.tableCellPadding - 2}px 18px`, fontWeight: 'bold', color: accentColor, fontSize: `${settings.tableFontSize - 1}px`, borderBottom: `2px solid ${accentMid}` }}>
-                            ★ سوبر سيت
-                          </td>
-                        </tr>
-                        {group.exercises.map((ex) => {
-                          rowNum++
-                          return (
-                            <tr key={ex.id} style={{ borderBottom: '1px solid #eee', background: rowNum % 2 === 0 ? '#fff' : `${accentColor}08` }}>
-                              <td style={{ padding: pad }}>{rowNum}</td>
-                              <td style={{ padding: pad, fontWeight: '600' }}>{ex.exercise.name}</td>
-                              <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
-                              {ex.freeText ? (
-                                <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
-                              ) : (
-                                <>
-                                  <td style={{ padding: pad, textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
-                                  <td style={{ padding: pad, textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
-                                </>
-                              )}
-                            </tr>
-                          )
-                        })}
-                      </>
+                      <tr key={`ss-${group.superSetId}`} style={{ borderBottom: '1px solid #eee', background: `${accentColor}10` }}>
+                        <td style={{ padding: pad }}>{rowNum}</td>
+                        <td style={{ padding: pad, fontWeight: '600', color: accentColor }}>
+                          {combinedName}
+                          <span style={{ display: 'inline-block', marginRight: '8px', padding: '1px 8px', borderRadius: '4px', background: accentColor, color: '#fff', fontSize: `${settings.tableFontSize - 2}px`, fontWeight: 'bold' }}>سوبر سيت</span>
+                        </td>
+                        <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{firstEx.exercise.group?.name || '-'}</td>
+                        {firstEx.freeText ? (
+                          <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{firstEx.freeText}</td>
+                        ) : (
+                          <>
+                            <td style={{ padding: pad, textAlign: 'center' }}>{firstEx.customSets || firstEx.exercise.sets}</td>
+                            <td style={{ padding: pad, textAlign: 'center' }}>{firstEx.customReps || firstEx.exercise.reps}</td>
+                          </>
+                        )}
+                      </tr>
                     )
                   }
                   const ex = group.exercises[0]
