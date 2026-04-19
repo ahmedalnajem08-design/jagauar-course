@@ -206,10 +206,29 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
           }
 
           const text = `تمرين ${selectedCourse.trainee.name} - ${selectedCourse.numberOfDays} أيام\nالمدرب: ${selectedCourse.trainer.name}\n\n` +
-            (selectedCourse.days.map((day) =>
-              `اليوم ${day.dayNumber}:\n` +
-              day.exercises.map((ex) => `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
-            ).join('\n\n') || '')
+            (selectedCourse.days.map((day) => {
+              // Group exercises for super set display
+              const groups: { type: 'single' | 'superset'; exercises: CourseDayExercise[] }[] = []
+              const processedSS = new Set<string>()
+              day.exercises.forEach((ex) => {
+                if (ex.superSetId && !processedSS.has(ex.superSetId)) {
+                  processedSS.add(ex.superSetId)
+                  const paired = day.exercises.filter((e) => e.superSetId === ex.superSetId)
+                  groups.push({ type: 'superset', exercises: paired })
+                } else if (!ex.superSetId) {
+                  groups.push({ type: 'single', exercises: [ex] })
+                }
+              })
+              return `اليوم ${day.dayNumber}:\n` +
+                groups.map((g) => {
+                  if (g.type === 'superset') {
+                    return `★ سوبر سيت:\n` +
+                      g.exercises.map((ex) => `  - ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`).join('\n')
+                  }
+                  const ex = g.exercises[0]
+                  return `- ${ex.exercise.name}: ${ex.freeText || `${ex.customSets || ex.exercise.sets}x${ex.customReps || ex.exercise.reps}`}`
+                }).join('\n')
+            }).join('\n\n') || '')
 
           window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`, '_blank')
           toast({ title: 'تم فتح واتساب', description: 'تم تحميل ملف PDF وفتح واتساب. أرفق الملف من جهازك وأرسله.', duration: 8000 })
@@ -827,21 +846,68 @@ function CoursePrintContent({ course, settings }: {
               </tr>
             </thead>
             <tbody>
-              {day.exercises.map((ex, i) => (
-                <tr key={ex.id} style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                  <td style={{ padding: pad }}>{i + 1}</td>
-                  <td style={{ padding: pad, fontWeight: '600' }}>{ex.exercise.name}</td>
-                  <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
-                  {ex.freeText ? (
-                    <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
-                  ) : (
-                    <>
-                      <td style={{ padding: pad, textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
-                      <td style={{ padding: pad, textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
-                    </>
-                  )}
-                </tr>
-              ))}
+              {(() => {
+                const groups: { type: 'single' | 'superset'; exercises: CourseDayExercise[]; superSetId?: string }[] = []
+                const processedSS = new Set<string>()
+                day.exercises.forEach((ex) => {
+                  if (ex.superSetId && !processedSS.has(ex.superSetId)) {
+                    processedSS.add(ex.superSetId)
+                    const paired = day.exercises.filter((e) => e.superSetId === ex.superSetId)
+                    groups.push({ type: 'superset', exercises: paired, superSetId: ex.superSetId })
+                  } else if (!ex.superSetId) {
+                    groups.push({ type: 'single', exercises: [ex] })
+                  }
+                })
+                let rowNum = 0
+                return groups.map((group) => {
+                  if (group.type === 'superset') {
+                    return (
+                      <>
+                        <tr key={`ss-header-${group.superSetId}`} style={{ background: `${accentColor}15` }}>
+                          <td colSpan={5} style={{ padding: `${settings.tableCellPadding - 2}px 18px`, fontWeight: 'bold', color: accentColor, fontSize: `${settings.tableFontSize - 1}px`, borderBottom: `2px solid ${accentMid}` }}>
+                            ★ سوبر سيت
+                          </td>
+                        </tr>
+                        {group.exercises.map((ex) => {
+                          rowNum++
+                          return (
+                            <tr key={ex.id} style={{ borderBottom: '1px solid #eee', background: rowNum % 2 === 0 ? '#fff' : `${accentColor}08` }}>
+                              <td style={{ padding: pad }}>{rowNum}</td>
+                              <td style={{ padding: pad, fontWeight: '600' }}>{ex.exercise.name}</td>
+                              <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
+                              {ex.freeText ? (
+                                <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
+                              ) : (
+                                <>
+                                  <td style={{ padding: pad, textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
+                                  <td style={{ padding: pad, textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
+                                </>
+                              )}
+                            </tr>
+                          )
+                        })}
+                      </>
+                    )
+                  }
+                  const ex = group.exercises[0]
+                  rowNum++
+                  return (
+                    <tr key={ex.id} style={{ borderBottom: '1px solid #eee', background: rowNum % 2 === 0 ? '#fff' : '#fafafa' }}>
+                      <td style={{ padding: pad }}>{rowNum}</td>
+                      <td style={{ padding: pad, fontWeight: '600' }}>{ex.exercise.name}</td>
+                      <td style={{ padding: pad, textAlign: 'center', color: '#666' }}>{ex.exercise.group?.name || '-'}</td>
+                      {ex.freeText ? (
+                        <td colSpan={2} style={{ padding: pad, textAlign: 'center', color: accentColor, fontWeight: '600' }}>{ex.freeText}</td>
+                      ) : (
+                        <>
+                          <td style={{ padding: pad, textAlign: 'center' }}>{ex.customSets || ex.exercise.sets}</td>
+                          <td style={{ padding: pad, textAlign: 'center' }}>{ex.customReps || ex.exercise.reps}</td>
+                        </>
+                      )}
+                    </tr>
+                  )
+                })
+              })()}
             </tbody>
           </table>
         </div>
