@@ -5,6 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get('id')
     const trainerId = request.nextUrl.searchParams.get('trainerId')
+    
+    console.log('[API /courses] GET request - id:', id, 'trainerId:', trainerId)
 
     if (id) {
       const course = await db.course.findUnique({
@@ -44,9 +46,10 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+    console.log('[API /courses] Returning', courses.length, 'courses for trainerId:', trainerId)
     return NextResponse.json(courses)
   } catch (error) {
-    console.error(error)
+    console.error('[API /courses] GET error:', error)
     return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 })
   }
 }
@@ -55,6 +58,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { traineeId, trainerId, numberOfDays, days } = body
+    
+    console.log('[API /courses] POST - traineeId:', traineeId, 'trainerId:', trainerId, 'numberOfDays:', numberOfDays, 'days:', days?.length)
 
     const course = await db.course.create({
       data: {

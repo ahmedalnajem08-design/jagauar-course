@@ -80,23 +80,30 @@ export default function CoursesList({ refreshTrigger, onEdit }: { refreshTrigger
   const { toast } = useToast()
 
   const fetchCourses = useCallback(async () => {
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     try {
       const res = await fetch(`/api/courses?trainerId=${user.id}`)
       if (!res.ok) {
-        throw new Error(`خطأ في الخادم (${res.status})`)
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `خطأ في الخادم (${res.status})`)
       }
       const data = await res.json()
+      console.log('[CoursesList] Fetched courses:', Array.isArray(data) ? data.length : 'not array', data)
       setCourses(Array.isArray(data) ? data : [])
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      console.error('[CoursesList] Fetch error:', errorMsg)
       toast({ title: 'خطأ', description: `فشل في تحميل الكورسات: ${errorMsg}`, variant: 'destructive' })
+      setCourses([])
     } finally {
       setLoading(false)
     }
   }, [toast, user])
 
-  useEffect(() => { fetchCourses(); reloadSettings() }, [fetchCourses, refreshTrigger, reloadSettings])
+  useEffect(() => { fetchCourses() }, [fetchCourses, refreshTrigger])
 
   // Generate PDF from the currently visible print-area element
   const handleGeneratePDF = async () => {
@@ -604,14 +611,20 @@ export default function CoursesList({ refreshTrigger, onEdit }: { refreshTrigger
   // Course List View
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
-          <ClipboardList className="h-6 w-6 text-emerald-600" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
+            <ClipboardList className="h-6 w-6 text-emerald-600" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">الكورسات</h2>
+            <p className="text-muted-foreground">{courses.length} كورس</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold">الكورسات</h2>
-          <p className="text-muted-foreground">{courses.length} كورس</p>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => { setLoading(true); fetchCourses(); reloadSettings(); }} className="gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          تحديث
+        </Button>
       </div>
 
       {courses.length === 0 ? (
@@ -637,14 +650,26 @@ export default function CoursesList({ refreshTrigger, onEdit }: { refreshTrigger
                       <p className="text-xs text-muted-foreground">{new Date(course.createdAt).toLocaleDateString('ar-IQ')}</p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => { e.stopPropagation(); setDeletingId(course.id); setDeleteDialogOpen(true) }}
-                    className="h-8 w-8 text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => { e.stopPropagation(); onEdit?.(course.id) }}
+                      className="h-8 w-8 text-amber-500 hover:text-amber-700"
+                      title="تعديل"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => { e.stopPropagation(); setDeletingId(course.id); setDeleteDialogOpen(true) }}
+                      className="h-8 w-8 text-red-500 hover:text-red-700"
+                      title="حذف"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
