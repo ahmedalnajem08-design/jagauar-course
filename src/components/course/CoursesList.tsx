@@ -20,6 +20,7 @@ interface CourseDayExercise {
   customSets: number | null
   customReps: number | null
   freeText?: string | null
+  superSetId?: string | null
   order: number
   exercise: {
     id: string
@@ -439,36 +440,69 @@ export default function CoursesList({ refreshTrigger }: { refreshTrigger?: numbe
                   {day.exercises.length === 0 ? (
                     <p className="text-center text-muted-foreground py-4">لا توجد تمارين في هذا اليوم</p>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="py-3 px-4 text-right font-medium">#</th>
-                            <th className="py-3 px-4 text-right font-medium">التمرين</th>
-                            <th className="py-3 px-4 text-center font-medium">المجموعة</th>
-                            <th className="py-3 px-4 text-center font-medium">المجموعات</th>
-                            <th className="py-3 px-4 text-center font-medium">التكرارات</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {day.exercises.map((ex, i) => (
-                            <tr key={ex.id} className="border-b hover:bg-muted/30 transition-colors">
-                              <td className="py-3 px-4">{i + 1}</td>
-                              <td className="py-3 px-4 font-medium">{ex.exercise.name}</td>
-                              <td className="py-3 px-4 text-center">
-                                <Badge variant="outline" className="text-xs">{ex.exercise.group?.name || '-'}</Badge>
-                              </td>
-                              <td className="py-3 px-4 text-center">
-                                {ex.freeText ? <span className="text-emerald-600 font-medium">{ex.freeText}</span> : (ex.customSets || ex.exercise.sets)}
-                              </td>
-                              <td className="py-3 px-4 text-center">
-                                {ex.freeText ? <span className="text-emerald-600 font-medium">-</span> : (ex.customReps || ex.exercise.reps)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    (() => {
+                      // Group exercises for display - super sets together
+                      const groups: { type: 'single' | 'superset'; exercises: CourseDayExercise[]; superSetId?: string }[] = []
+                      const processedSS = new Set<string>()
+                      day.exercises.forEach((ex) => {
+                        if (ex.superSetId && !processedSS.has(ex.superSetId)) {
+                          processedSS.add(ex.superSetId)
+                          const paired = day.exercises.filter((e) => e.superSetId === ex.superSetId)
+                          groups.push({ type: 'superset', exercises: paired, superSetId: ex.superSetId })
+                        } else if (!ex.superSetId) {
+                          groups.push({ type: 'single', exercises: [ex] })
+                        }
+                      })
+                      let rowNum = 0
+                      return (
+                        <div className="space-y-2">
+                          {groups.map((group) => {
+                            if (group.type === 'superset') {
+                              return (
+                                <div key={group.superSetId} className="border-2 border-purple-300 dark:border-purple-700 rounded-lg overflow-hidden">
+                                  <div className="bg-purple-50 dark:bg-purple-950 px-3 py-1 flex items-center gap-2">
+                                    <span className="text-xs font-bold text-purple-600">سوبر سيت</span>
+                                  </div>
+                                  <table className="w-full text-sm">
+                                    <tbody>
+                                      {group.exercises.map((ex) => {
+                                        rowNum++
+                                        return (
+                                          <tr key={ex.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                                            <td className="py-2 px-3 w-8">{rowNum}</td>
+                                            <td className="py-2 px-3 font-medium">{ex.exercise.name}</td>
+                                            <td className="py-2 px-3 text-center"><Badge variant="outline" className="text-xs">{ex.exercise.group?.name || '-'}</Badge></td>
+                                            <td className="py-2 px-3 text-center w-20">{ex.freeText ? <span className="text-emerald-600 font-medium">{ex.freeText}</span> : (ex.customSets || ex.exercise.sets)}</td>
+                                            <td className="py-2 px-3 text-center w-20">{ex.freeText ? <span className="text-emerald-600 font-medium">-</span> : (ex.customReps || ex.exercise.reps)}</td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )
+                            }
+                            const ex = group.exercises[0]
+                            rowNum++
+                            return (
+                              <div key={ex.id} className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <tbody>
+                                    <tr className="border-b hover:bg-muted/30 transition-colors">
+                                      <td className="py-3 px-4">{rowNum}</td>
+                                      <td className="py-3 px-4 font-medium">{ex.exercise.name}</td>
+                                      <td className="py-3 px-4 text-center"><Badge variant="outline" className="text-xs">{ex.exercise.group?.name || '-'}</Badge></td>
+                                      <td className="py-3 px-4 text-center">{ex.freeText ? <span className="text-emerald-600 font-medium">{ex.freeText}</span> : (ex.customSets || ex.exercise.sets)}</td>
+                                      <td className="py-3 px-4 text-center">{ex.freeText ? <span className="text-emerald-600 font-medium">-</span> : (ex.customReps || ex.exercise.reps)}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
                   )}
                 </CardContent>
               </Card>

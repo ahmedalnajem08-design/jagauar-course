@@ -93,6 +93,7 @@ model CourseDayExercise {
   customSets   Int?
   customReps   Int?
   freeText     String?    // Free text for sets/reps like "3×12" or "30 ثانية"
+  superSetId   String?    // معرف السوبر سيت - التمارين اللي نفس المعرف تكون سوبر سيت
   order        Int        @default(0)
 }
 

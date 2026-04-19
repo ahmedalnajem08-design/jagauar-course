@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/hooks/use-auth'
-import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X, Search } from 'lucide-react'
+import { Plus, Trash2, Dumbbell, Check, ArrowLeft, ArrowRight, User, CalendarDays, Save, X, Search, Link2, Unlink } from 'lucide-react'
 
 interface Trainee {
   id: string
@@ -41,7 +41,8 @@ interface DayExercise {
   exercise?: Exercise
   customSets: number
   customReps: number
-  freeText?: string  // Free text for sets/reps like "3×12" or "30 ثانية"
+  freeText?: string
+  superSetId?: string  // معرف السوبر سيت
 }
 
 interface DayData {
@@ -62,6 +63,8 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('all')
   const [saving, setSaving] = useState(false)
   const [traineeSearch, setTraineeSearch] = useState('')
+  const [superSetMode, setSuperSetMode] = useState(false)  // وضع السوبر سيت
+  const [superSetFirst, setSuperSetFirst] = useState<string | null>(null)  // أول تمرين في السوبر سيت
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -99,31 +102,106 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
     }
   }, [numberOfDays])
 
+  const generateSuperSetId = () => {
+    return 'ss_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)
+  }
+
   const addExerciseToDay = (dayNumber: number, exercise: Exercise) => {
     setDays((prev) =>
       prev.map((d) => {
         if (d.dayNumber !== dayNumber) return d
         if (d.exercises.find((e) => e.exerciseId === exercise.id)) return d
-        return {
-          ...d,
-          exercises: [
-            ...d.exercises,
-            {
-              exerciseId: exercise.id,
-              exercise,
-              customSets: exercise.sets,
-              customReps: exercise.reps,
-            },
-          ],
+
+        if (superSetMode && superSetFirst) {
+          // إضافة تمرين ثاني للسوبر سيت
+          const firstEx = d.exercises.find((e) => e.exerciseId === superSetFirst)
+          const ssId = firstEx?.superSetId || generateSuperSetId()
+
+          return {
+            ...d,
+            exercises: [
+              ...d.exercises.map((e) =>
+                e.exerciseId === superSetFirst ? { ...e, superSetId: ssId } : e
+              ),
+              {
+                exerciseId: exercise.id,
+                exercise,
+                customSets: exercise.sets,
+                customReps: exercise.reps,
+                superSetId: ssId,
+              },
+            ],
+          }
+        } else {
+          return {
+            ...d,
+            exercises: [
+              ...d.exercises,
+              {
+                exerciseId: exercise.id,
+                exercise,
+                customSets: exercise.sets,
+                customReps: exercise.reps,
+              },
+            ],
+          }
         }
       })
     )
+
+    // إنهاء وضع السوبر سيت بعد الإضافة
+    if (superSetMode && superSetFirst) {
+      setSuperSetMode(false)
+      setSuperSetFirst(null)
+      toast({ title: 'تم إنشاء سوبر سيت', description: 'تم ربط التمرينين معاً' })
+    }
+  }
+
+  // بدء وضع السوبر سيت - اختيار التمرين الأول
+  const startSuperSet = (dayNumber: number, exerciseId: string) => {
+    setSuperSetMode(true)
+    setSuperSetFirst(exerciseId)
+    toast({ title: 'سوبر سيت', description: 'اختر التمرين الثاني للربط', duration: 3000 })
+  }
+
+  // إلغاء السوبر سيت
+  const cancelSuperSet = () => {
+    setSuperSetMode(false)
+    setSuperSetFirst(null)
+  }
+
+  // فك ربط السوبر سيت
+  const unlinkSuperSet = (dayNumber: number, superSetId: string) => {
+    setDays((prev) =>
+      prev.map((d) => {
+        if (d.dayNumber !== dayNumber) return d
+        return {
+          ...d,
+          exercises: d.exercises.map((e) =>
+            e.superSetId === superSetId ? { ...e, superSetId: undefined } : e
+          ),
+        }
+      })
+    )
+    toast({ title: 'تم فك الربط', description: 'تم فك ربط السوبر سيت' })
   }
 
   const removeExerciseFromDay = (dayNumber: number, exerciseId: string) => {
     setDays((prev) =>
       prev.map((d) => {
         if (d.dayNumber !== dayNumber) return d
+        const exToRemove = d.exercises.find((e) => e.exerciseId === exerciseId)
+        // لو التمرين جزء من سوبر سيت، فك الربط
+        if (exToRemove?.superSetId) {
+          return {
+            ...d,
+            exercises: d.exercises
+              .filter((e) => e.exerciseId !== exerciseId)
+              .map((e) =>
+                e.superSetId === exToRemove.superSetId ? { ...e, superSetId: undefined } : e
+              ),
+          }
+        }
         return { ...d, exercises: d.exercises.filter((e) => e.exerciseId !== exerciseId) }
       })
     )
@@ -184,6 +262,7 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
               customSets: e.customSets,
               customReps: e.customReps,
               freeText: e.freeText && e.freeText.trim() ? e.freeText.trim() : null,
+              superSetId: e.superSetId || null,
             })),
           })),
         }),
@@ -203,15 +282,31 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
 
   const currentDay = days.find((d) => d.dayNumber === activeDay)
   const filteredGroups = selectedGroupFilter === 'all' ? groups : groups.filter((g) => g.id === selectedGroupFilter)
-
   const selectedTraineeData = trainees.find((t) => t.id === selectedTrainee)
 
-  // Filter trainees by search (name or phone)
   const filteredTrainees = trainees.filter((t) => {
     if (!traineeSearch.trim()) return true
     const q = traineeSearch.trim().toLowerCase()
     return t.name.toLowerCase().includes(q) || (t as any).phone?.toLowerCase().includes(q)
   })
+
+  // تجميع تمارين السوبر سيت معاً للعرض
+  const groupExercisesForDisplay = (exercises: DayExercise[]) => {
+    const result: { type: 'single' | 'superset'; exercises: DayExercise[]; superSetId?: string }[] = []
+    const processedSuperSets = new Set<string>()
+
+    exercises.forEach((ex) => {
+      if (ex.superSetId && !processedSuperSets.has(ex.superSetId)) {
+        processedSuperSets.add(ex.superSetId)
+        const paired = exercises.filter((e) => e.superSetId === ex.superSetId)
+        result.push({ type: 'superset', exercises: paired, superSetId: ex.superSetId })
+      } else if (!ex.superSetId) {
+        result.push({ type: 'single', exercises: [ex] })
+      }
+    })
+
+    return result
+  }
 
   if (loading) {
     return (
@@ -261,7 +356,6 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
               </div>
             ) : (
               <>
-                {/* Search Input */}
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -381,6 +475,20 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
             </CardHeader>
           </Card>
 
+          {/* Super Set Mode Banner */}
+          {superSetMode && (
+            <div className="bg-purple-50 dark:bg-purple-950 border border-purple-300 dark:border-purple-700 rounded-lg p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                <Link2 className="h-5 w-5" />
+                <span className="font-medium text-sm">وضع السوبر سيت - اختر التمرين الثاني</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={cancelSuperSet} className="text-purple-600 hover:text-purple-800">
+                <X className="h-4 w-4 ml-1" />
+                إلغاء
+              </Button>
+            </div>
+          )}
+
           <Tabs value={activeDay.toString()} onValueChange={(v) => setActiveDay(parseInt(v))}>
             <TabsList className="flex flex-wrap gap-1 h-auto bg-muted p-1">
               {days.map((d) => (
@@ -397,7 +505,6 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
 
             {days.map((day) => (
               <TabsContent key={day.dayNumber} value={day.dayNumber.toString()} className="space-y-4">
-                {/* Current Day Exercises */}
                 {currentDay && currentDay.dayNumber === day.dayNumber && (
                   <>
                     <Card>
@@ -411,110 +518,148 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            {day.exercises.map((ex, index) => (
-                              <div key={ex.exerciseId} className="p-3 rounded-lg border bg-card">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-3">
-                                    <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                                    <span className="font-medium">{ex.exercise?.name || 'تمرين'}</span>
-                                    {ex.exercise?.group && (
-                                      <Badge variant="outline" className="text-xs">{ex.exercise.group.name}</Badge>
-                                    )}
+                            {groupExercisesForDisplay(day.exercises).map((group, gi) => {
+                              if (group.type === 'superset') {
+                                return (
+                                  <div key={group.superSetId} className="border-2 border-purple-300 dark:border-purple-700 rounded-lg overflow-hidden">
+                                    <div className="bg-purple-50 dark:bg-purple-950 px-3 py-1.5 flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Link2 className="h-4 w-4 text-purple-600" />
+                                        <span className="text-sm font-bold text-purple-700 dark:text-purple-300">سوبر سيت</span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => unlinkSuperSet(day.dayNumber, group.superSetId!)}
+                                        className="h-6 text-xs text-purple-600 hover:text-purple-800 gap-1"
+                                      >
+                                        <Unlink className="h-3 w-3" />
+                                        فك الربط
+                                      </Button>
+                                    </div>
+                                    {group.exercises.map((ex, ei) => (
+                                      <div key={ex.exerciseId} className={`p-3 ${ei === 0 ? 'border-b border-purple-200 dark:border-purple-800' : ''}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <div className="flex items-center gap-3">
+                                            <span className="h-6 w-6 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 text-xs font-bold flex items-center justify-center">{gi + 1}.{ei + 1}</span>
+                                            <span className="font-medium">{ex.exercise?.name || 'تمرين'}</span>
+                                            {ex.exercise?.group && (
+                                              <Badge variant="outline" className="text-xs">{ex.exercise.group.name}</Badge>
+                                            )}
+                                          </div>
+                                          <Button variant="ghost" size="icon" onClick={() => removeExerciseFromDay(day.dayNumber, ex.exerciseId)} className="h-8 w-8 text-red-500">
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                        {/* Toggle + inputs */}
+                                        <div className="flex gap-1 mb-2 bg-muted rounded-lg p-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => updateFreeText(day.dayNumber, ex.exerciseId, '')}
+                                            className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${!ex.freeText ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                          >ثابت</button>
+                                          <button
+                                            type="button"
+                                            onClick={() => { if (!ex.freeText) updateFreeText(day.dayNumber, ex.exerciseId, ' ') }}
+                                            className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${ex.freeText ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                          >حر</button>
+                                        </div>
+                                        {!ex.freeText ? (
+                                          <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 flex-1">
+                                              <Label className="text-xs whitespace-nowrap">مجموعات</Label>
+                                              <div className="flex items-center border rounded-lg overflow-hidden">
+                                                <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, ex.customSets - 1))} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">−</button>
+                                                <Input type="number" min={1} value={ex.customSets} onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, parseInt(e.target.value) || 1))} className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', ex.customSets + 1)} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">+</button>
+                                              </div>
+                                            </div>
+                                            <span className="text-muted-foreground text-lg">×</span>
+                                            <div className="flex items-center gap-2 flex-1">
+                                              <Label className="text-xs whitespace-nowrap">تكرارات</Label>
+                                              <div className="flex items-center border rounded-lg overflow-hidden">
+                                                <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, ex.customReps - 1))} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">−</button>
+                                                <Input type="number" min={1} value={ex.customReps} onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, parseInt(e.target.value) || 1))} className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                                <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', ex.customReps + 1)} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">+</button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <Input placeholder="اكتب هنا..." value={ex.freeText === ' ' ? '' : ex.freeText} onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)} className="h-9 text-sm" dir="rtl" autoFocus />
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
-                                  <Button variant="ghost" size="icon" onClick={() => removeExerciseFromDay(day.dayNumber, ex.exerciseId)} className="h-8 w-8 text-red-500">
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                )
+                              }
 
-                                {/* Toggle: ثابت / حر */}
-                                <div className="flex gap-1 mb-2 bg-muted rounded-lg p-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      updateFreeText(day.dayNumber, ex.exerciseId, '')
-                                    }}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${!ex.freeText ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                  >
-                                    ثابت (أرقام)
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (!ex.freeText) updateFreeText(day.dayNumber, ex.exerciseId, ' ')
-                                    }}
-                                    className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${ex.freeText ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                  >
-                                    حر (نص)
-                                  </button>
-                                </div>
+                              // Single exercise
+                              const ex = group.exercises[0]
+                              return (
+                                <div key={ex.exerciseId} className="p-3 rounded-lg border bg-card">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-3">
+                                      <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 text-xs font-bold flex items-center justify-center">{gi + 1}</span>
+                                      <span className="font-medium">{ex.exercise?.name || 'تمرين'}</span>
+                                      {ex.exercise?.group && (
+                                        <Badge variant="outline" className="text-xs">{ex.exercise.group.name}</Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => startSuperSet(day.dayNumber, ex.exerciseId)}
+                                        className="h-7 text-xs text-purple-600 hover:text-purple-800 gap-1"
+                                        title="ربط ك سوبر سيت"
+                                      >
+                                        <Link2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" onClick={() => removeExerciseFromDay(day.dayNumber, ex.exerciseId)} className="h-8 w-8 text-red-500">
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
 
-                                {/* Fixed Mode: Number inputs */}
-                                {!ex.freeText && (
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <Label className="text-xs whitespace-nowrap">مجموعات</Label>
-                                      <div className="flex items-center border rounded-lg overflow-hidden">
-                                        <button
-                                          type="button"
-                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, ex.customSets - 1))}
-                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
-                                        >−</button>
-                                        <Input
-                                          type="number"
-                                          min={1}
-                                          value={ex.customSets}
-                                          onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, parseInt(e.target.value) || 1))}
-                                          className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', ex.customSets + 1)}
-                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
-                                        >+</button>
+                                  <div className="flex gap-1 mb-2 bg-muted rounded-lg p-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateFreeText(day.dayNumber, ex.exerciseId, '')}
+                                      className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${!ex.freeText ? 'bg-emerald-600 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >ثابت</button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { if (!ex.freeText) updateFreeText(day.dayNumber, ex.exerciseId, ' ') }}
+                                      className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${ex.freeText ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >حر</button>
+                                  </div>
+
+                                  {!ex.freeText ? (
+                                    <div className="flex items-center gap-3">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <Label className="text-xs whitespace-nowrap">مجموعات</Label>
+                                        <div className="flex items-center border rounded-lg overflow-hidden">
+                                          <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, ex.customSets - 1))} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">−</button>
+                                          <Input type="number" min={1} value={ex.customSets} onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', Math.max(1, parseInt(e.target.value) || 1))} className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                          <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customSets', ex.customSets + 1)} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">+</button>
+                                        </div>
+                                      </div>
+                                      <span className="text-muted-foreground text-lg">×</span>
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <Label className="text-xs whitespace-nowrap">تكرارات</Label>
+                                        <div className="flex items-center border rounded-lg overflow-hidden">
+                                          <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, ex.customReps - 1))} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">−</button>
+                                          <Input type="number" min={1} value={ex.customReps} onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, parseInt(e.target.value) || 1))} className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                                          <button type="button" onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', ex.customReps + 1)} className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold">+</button>
+                                        </div>
                                       </div>
                                     </div>
-                                    <span className="text-muted-foreground text-lg">×</span>
-                                    <div className="flex items-center gap-2 flex-1">
-                                      <Label className="text-xs whitespace-nowrap">تكرارات</Label>
-                                      <div className="flex items-center border rounded-lg overflow-hidden">
-                                        <button
-                                          type="button"
-                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, ex.customReps - 1))}
-                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
-                                        >−</button>
-                                        <Input
-                                          type="number"
-                                          min={1}
-                                          value={ex.customReps}
-                                          onChange={(e) => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', Math.max(1, parseInt(e.target.value) || 1))}
-                                          className="w-12 h-8 text-center border-0 focus-visible:ring-0 text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => updateDayExercise(day.dayNumber, ex.exerciseId, 'customReps', ex.customReps + 1)}
-                                          className="px-2 py-1 bg-muted hover:bg-muted/80 text-sm font-bold"
-                                        >+</button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Free Text Mode: Text input */}
-                                {ex.freeText && (
-                                  <div className="space-y-1">
-                                    <Input
-                                      placeholder="اكتب هنا... مثال: 30 ثانية أو 3×12"
-                                      value={ex.freeText === ' ' ? '' : ex.freeText}
-                                      onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)}
-                                      className="h-9 text-sm"
-                                      dir="rtl"
-                                      autoFocus
-                                    />
-                                    <p className="text-xs text-amber-600">✓ سيتم عرض النص المكتوب بدل المجموعات والتكرارات</p>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                                  ) : (
+                                    <Input placeholder="اكتب هنا..." value={ex.freeText === ' ' ? '' : ex.freeText} onChange={(e) => updateFreeText(day.dayNumber, ex.exerciseId, e.target.value)} className="h-9 text-sm" dir="rtl" autoFocus />
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
                       </CardContent>
@@ -550,18 +695,20 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                                 <div className="flex flex-wrap gap-2">
                                   {g.exercises.map((ex) => {
                                     const isAdded = day.exercises.find((e) => e.exerciseId === ex.id)
+                                    const isSuperSetTarget = superSetMode && superSetFirst && !isAdded
                                     return (
                                       <Button
                                         key={ex.id}
-                                        variant={isAdded ? 'default' : 'outline'}
+                                        variant={isAdded ? 'default' : isSuperSetTarget ? 'outline' : 'outline'}
                                         size="sm"
                                         onClick={() => !isAdded && addExerciseToDay(day.dayNumber, ex)}
-                                        className={isAdded ? 'bg-emerald-600 hover:bg-emerald-700 gap-1' : 'gap-1'}
+                                        className={isAdded ? 'bg-emerald-600 hover:bg-emerald-700 gap-1' : isSuperSetTarget ? 'gap-1 border-purple-400 text-purple-700 hover:bg-purple-50 hover:border-purple-500' : 'gap-1'}
                                         disabled={!!isAdded}
                                       >
                                         <Plus className="h-3 w-3" />
                                         {ex.name}
                                         <span className="text-xs opacity-70">({ex.sets}x{ex.reps})</span>
+                                        {isSuperSetTarget && <Link2 className="h-3 w-3" />}
                                       </Button>
                                     )
                                   })}
@@ -619,14 +766,35 @@ export default function CourseBuilder({ onSaved }: { onSaved?: () => void }) {
                   <Badge variant="secondary">{day.exercises.length} تمرين</Badge>
                 </h4>
                 <div className="space-y-1">
-                  {day.exercises.map((ex, i) => (
-                    <div key={ex.exerciseId} className="flex items-center justify-between py-1.5 text-sm">
-                      <span>{i + 1}. {ex.exercise?.name}</span>
-                      <span className="text-muted-foreground">
-                        {ex.freeText || `${ex.customSets} مجموعات × ${ex.customReps} تكرارات`}
-                      </span>
-                    </div>
-                  ))}
+                  {groupExercisesForDisplay(day.exercises).map((group, i) => {
+                    if (group.type === 'superset') {
+                      return (
+                        <div key={group.superSetId} className="border border-purple-300 dark:border-purple-700 rounded-md p-2 bg-purple-50/50 dark:bg-purple-950/50">
+                          <div className="flex items-center gap-1 mb-1">
+                            <Link2 className="h-3.5 w-3.5 text-purple-600" />
+                            <span className="text-xs font-bold text-purple-600">سوبر سيت</span>
+                          </div>
+                          {group.exercises.map((ex, ei) => (
+                            <div key={ex.exerciseId} className="flex items-center justify-between py-1 text-sm">
+                              <span>{i + 1}.{ei + 1}. {ex.exercise?.name}</span>
+                              <span className="text-muted-foreground">
+                                {ex.freeText || `${ex.customSets}×${ex.customReps}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    const ex = group.exercises[0]
+                    return (
+                      <div key={ex.exerciseId} className="flex items-center justify-between py-1.5 text-sm">
+                        <span>{i + 1}. {ex.exercise?.name}</span>
+                        <span className="text-muted-foreground">
+                          {ex.freeText || `${ex.customSets} مجموعات × ${ex.customReps} تكرارات`}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ))}

@@ -65,11 +65,12 @@ export async function POST(request: NextRequest) {
           create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
-              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }, index: number) => ({
+              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
                 customSets: ex.customSets,
                 customReps: ex.customReps,
                 freeText: ex.freeText || null,
+                superSetId: ex.superSetId || null,
                 order: index,
               })),
             },
@@ -112,11 +113,12 @@ export async function PUT(request: NextRequest) {
           create: days.map((day: { dayNumber: number; exercises: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }[] }) => ({
             dayNumber: day.dayNumber,
             exercises: {
-              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string }, index: number) => ({
+              create: day.exercises.map((ex: { exerciseId: string; customSets?: number; customReps?: number; freeText?: string; superSetId?: string }, index: number) => ({
                 exerciseId: ex.exerciseId,
                 customSets: ex.customSets,
                 customReps: ex.customReps,
                 freeText: ex.freeText || null,
+                superSetId: ex.superSetId || null,
                 order: index,
               })),
             },
