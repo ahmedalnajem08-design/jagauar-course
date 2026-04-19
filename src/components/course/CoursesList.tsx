@@ -83,10 +83,14 @@ export default function CoursesList({ refreshTrigger, onEdit }: { refreshTrigger
     if (!user) return
     try {
       const res = await fetch(`/api/courses?trainerId=${user.id}`)
+      if (!res.ok) {
+        throw new Error(`خطأ في الخادم (${res.status})`)
+      }
       const data = await res.json()
-      setCourses(data)
-    } catch {
-      toast({ title: 'خطأ', description: 'فشل في تحميل الكورسات', variant: 'destructive' })
+      setCourses(Array.isArray(data) ? data : [])
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      toast({ title: 'خطأ', description: `فشل في تحميل الكورسات: ${errorMsg}`, variant: 'destructive' })
     } finally {
       setLoading(false)
     }

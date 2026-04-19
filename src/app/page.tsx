@@ -40,6 +40,19 @@ function AppContent() {
     setActiveTab('create')
   }
 
+  const handleTabChange = (tab: NavId) => {
+    // عند الانتقال لإنشاء كورس جديد (وليس تعديل)، تأكد من مسح editCourseId
+    if (tab === 'create' && activeTab !== 'create') {
+      // سيتم التعامل معها بواسطة key prop
+    }
+    // عند مغادرة تبويب إنشاء كورس بدون حفظ، امسح editCourseId
+    if (activeTab === 'create' && tab !== 'create') {
+      setEditCourseId(null)
+    }
+    setActiveTab(tab)
+    setSidebarOpen(false)
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -107,7 +120,7 @@ function AppContent() {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => { setActiveTab(item.id); setSidebarOpen(false) }}
+                    onClick={() => { handleTabChange(item.id) }}
                     className={cn(
                       'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
                       activeTab === item.id
@@ -161,7 +174,7 @@ function AppContent() {
           <div className="p-4 lg:p-8 max-w-7xl mx-auto">
             {activeTab === 'trainees' && <TraineesManager />}
             {activeTab === 'exercises' && <ExerciseGroupsManager />}
-            {activeTab === 'create' && <CourseBuilder onSaved={handleCourseSaved} editCourseId={editCourseId} />}
+            {activeTab === 'create' && <CourseBuilder key={editCourseId || 'new'} onSaved={handleCourseSaved} editCourseId={editCourseId} />}
             {activeTab === 'courses' && <CoursesList refreshTrigger={courseRefresh} onEdit={handleEditCourse} />}
             {activeTab === 'settings' && <SettingsManager />}
           </div>

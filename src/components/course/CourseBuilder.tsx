@@ -71,10 +71,24 @@ export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () 
   const draftRestoredRef = useRef(false)
   const isEditing = !!editCourseId
 
-  // حفظ المسودة في localStorage
+  // حفظ المسودة في localStorage - فقط البيانات الأساسية بدون تفاصيل التمارين
   const saveDraft = useCallback((data: { step: number; selectedTrainee: string; numberOfDays: number; days: DayData[]; activeDay: number }) => {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(data))
+      // حفظ فقط البيانات الأساسية لكل تمرين (بدون كائن exercise الكامل)
+      const minimalData = {
+        ...data,
+        days: data.days.map(d => ({
+          dayNumber: d.dayNumber,
+          exercises: d.exercises.map(e => ({
+            exerciseId: e.exerciseId,
+            customSets: e.customSets,
+            customReps: e.customReps,
+            freeText: e.freeText,
+            superSetId: e.superSetId,
+          }))
+        }))
+      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(minimalData))
     } catch {}
   }, [])
 
@@ -163,23 +177,40 @@ export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () 
         // استعادة المسودة بعد تحميل البيانات
         const draft = restoreDraft()
         if (draft && draft.days && Array.isArray(draft.days) && draft.numberOfDays) {
-          const enrichedDays = draft.days.map((day: DayData) => ({
-            ...day,
-            exercises: day.exercises.map((ex: DayExercise) => {
-              const fullExercise = allExercises.find((e: Exercise) => e.id === ex.exerciseId)
-              return {
-                ...ex,
-                exercise: fullExercise || ex.exercise,
-              }
-            }),
-          }))
+          // التحقق من وجود تمارين في المسودة
+          const hasExercises = draft.days.some(d => d.exercises && d.exercises.length > 0)
+          if (!hasExercises) {
+            // المسودة فارغة من التمارين - كورس جديد
+            initializeDays(numberOfDays)
+          } else {
+            const enrichedDays = draft.days.map((day: DayData) => ({
+              dayNumber: day.dayNumber,
+              exercises: (day.exercises || []).map((ex: DayExercise) => {
+                const fullExercise = allExercises.find((e: Exercise) => e.id === ex.exerciseId)
+                return {
+                  exerciseId: ex.exerciseId,
+                  exercise: fullExercise || {
+                    id: ex.exerciseId,
+                    name: 'تمرين محذوف',
+                    sets: 3,
+                    reps: 10,
+                    groupId: '',
+                  },
+                  customSets: ex.customSets || 3,
+                  customReps: ex.customReps || 10,
+                  freeText: ex.freeText,
+                  superSetId: ex.superSetId,
+                }
+              }),
+            }))
 
-          setStep(draft.step)
-          setSelectedTrainee(draft.selectedTrainee)
-          setNumberOfDays(draft.numberOfDays)
-          setDays(enrichedDays)
-          setActiveDay(draft.activeDay)
-          toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
+            setStep(draft.step)
+            setSelectedTrainee(draft.selectedTrainee)
+            setNumberOfDays(draft.numberOfDays)
+            setDays(enrichedDays)
+            setActiveDay(draft.activeDay)
+            toast({ title: 'تم استعادة المسودة', description: 'تم استعادة الكورس الذي كنت تعمل عليه', duration: 3000 })
+          }
         } else {
           // كورس جديد - إنشاء أيام فارغة
           initializeDays(numberOfDays)
@@ -414,23 +445,29 @@ export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () 
         })),
       }
 
+      let res: Response
       if (isEditing && editCourseId) {
         // تحديث كورس موجود
-        await fetch('/api/courses', {
+        res = await fetch('/api/courses', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: editCourseId, ...courseData }),
         })
-        toast({ title: 'تم التحديث', description: 'تم تحديث الكورس بنجاح' })
       } else {
         // إنشاء كورس جديد
-        await fetch('/api/courses', {
+        res = await fetch('/api/courses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(courseData),
         })
-        toast({ title: 'تم الحفظ', description: 'تم إنشاء الكورس بنجاح' })
       }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `خطأ في الخادم (${res.status})`)
+      }
+
+      toast({ title: isEditing ? 'تم التحديث' : 'تم الحفظ', description: isEditing ? 'تم تحديث الكورس بنجاح' : 'تم إنشاء الكورس بنجاح' })
       clearDraft()
       setStep(1)
       setSelectedTrainee('')
@@ -438,8 +475,9 @@ export default function CourseBuilder({ onSaved, editCourseId }: { onSaved?: () 
       setDays([])
       draftRestoredRef.current = false
       onSaved?.()
-    } catch {
-      toast({ title: 'خطأ', description: isEditing ? 'فشل في تحديث الكورس' : 'فشل في إنشاء الكورس', variant: 'destructive' })
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'خطأ غير معروف'
+      toast({ title: 'خطأ', description: isEditing ? `فشل في تحديث الكورس: ${errorMsg}` : `فشل في إنشاء الكورس: ${errorMsg}`, variant: 'destructive' })
     } finally {
       setSaving(false)
     }
